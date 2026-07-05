@@ -292,6 +292,8 @@ async def generate_only_endpoint(payload: AnswerRequest):
         }
 
     except Exception as error:
+        import logging
+        logging.getLogger(__name__).exception("Generate endpoint failed")
         raise HTTPException(status_code=500, detail=f"Answer generation failed: {str(error)}")
 
 @router.post("/save-entire-paper")
