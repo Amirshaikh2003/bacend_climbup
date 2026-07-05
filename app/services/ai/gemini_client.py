@@ -53,7 +53,7 @@ def _get_api_key() -> str:
 
 
 def _get_model() -> str:
-    return "gemini-1.5-flash"
+    return "gemini-2.0-flash"
 
 
 def _download_image_b64(url: str) -> Optional[tuple[str, str]]:
