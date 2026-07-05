@@ -295,12 +295,12 @@ def extract_diagrams_from_page(page, page_number: int, temp_dir: str):
 
     _, binary = cv2.threshold(
         gray,
-        180,  # Lowered from 220 to 180 to ignore light gray watermarks
+        210,  # Increased from 180 to catch lighter diagrams
         255,
         cv2.THRESH_BINARY_INV,
     )
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
     binary = cv2.dilate(binary, kernel, iterations=2)
 
     contours, _ = cv2.findContours(
@@ -331,7 +331,7 @@ def extract_diagrams_from_page(page, page_number: int, temp_dir: str):
         if h < 60:
             continue
 
-        if density > 0.44:
+        if density > 0.70:
             continue
 
         crop = image[y:y + h, x:x + w]
