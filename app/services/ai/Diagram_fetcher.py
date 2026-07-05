@@ -15,30 +15,38 @@ _TIMEOUT     = 15  # seconds
 
 
 # ---------------------------------------------------------------------------
-# Core SerpAPI call
+# Core Google Custom Search API call
 # ---------------------------------------------------------------------------
 
 def _fetch_image_url(search_query: str) -> Optional[str]:
     """Return the first usable image URL for *search_query*, or None."""
-    api_key = os.getenv("SERPAPI_API_KEY")
-    if not api_key:
-        logger.warning("SERPAPI_API_KEY not set")
+    api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
+    cx = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
+    
+    if not api_key or not cx:
+        logger.warning("GOOGLE_SEARCH_API_KEY or GOOGLE_SEARCH_ENGINE_ID not set")
         return None
 
     try:
-        resp = requests.get(
-            _SERPAPI_URL,
-            params={"engine": "google_images", "q": search_query, "api_key": api_key, "safe": "active"},
-            timeout=_TIMEOUT,
-            verify=False,
-        )
+        url = "https://www.googleapis.com/customsearch/v1"
+        params = {
+            "key": api_key,
+            "cx": cx,
+            "q": search_query,
+            "searchType": "image",
+            "num": 3,
+            "safe": "active",
+        }
+        resp = requests.get(url, params=params, timeout=_TIMEOUT, verify=False)
         resp.raise_for_status()
-        for img in resp.json().get("images_results", []):
-            url = img.get("original") or img.get("thumbnail")
-            if isinstance(url, str) and url.startswith("http"):
-                return url
+        
+        items = resp.json().get("items", [])
+        for img in items:
+            link = img.get("link")
+            if isinstance(link, str) and link.startswith("http"):
+                return link
     except Exception as exc:
-        logger.warning("SerpAPI image fetch failed for %r: %s", search_query, exc)
+        logger.warning("Google Image fetch failed for %r: %s", search_query, exc)
 
     return None
 
