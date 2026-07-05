@@ -888,11 +888,13 @@ def repair_json_string_escapes(text: str) -> str:
 
 def openrouter_call(
     messages: List[Dict[str, str]],
+    model: str | None = None,
     max_tokens: int = MAX_TOKENS,
     temperature: float = 0.25,
 ) -> str:
     return chat_completion(
         messages=messages,
+        model=model,
         max_tokens=max_tokens,
         temperature=temperature,
     )
@@ -2437,30 +2439,42 @@ def generate_answer_via_openrouter(
         expected_marks = 8
 
     try:
+        from app.core.config import settings
         system_prompt = get_system_prompt_with_image_policy(analysis, question)
+        models_to_try = [settings.OPENROUTER_MODEL, settings.OPENROUTER_MODEL_FALLBACK]
+        
+        last_error = None
+        for m in dict.fromkeys(m for m in models_to_try if m):
+            try:
+                raw = openrouter_call(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {
+                            "role": "user",
+                            "content": build_prompt(question, analysis, expected_marks),
+                        },
+                    ],
+                    model=m,
+                    max_tokens=MAX_TOKENS,
+                    temperature=0.22,
+                )
 
-        raw = openrouter_call(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": build_prompt(question, analysis, expected_marks),
-                },
-            ],
-            max_tokens=MAX_TOKENS,
-            temperature=0.22,
-        )
+                parsed = clean_json(raw)
+                validated = validate_output(parsed, question)
+                improved = apply_final_quality_layer(
+                    payload=validated,
+                    analysis=analysis,
+                    question=question,
+                    marks=expected_marks,
+                )
 
-        parsed = clean_json(raw)
-        validated = validate_output(parsed, question)
-        improved = apply_final_quality_layer(
-            payload=validated,
-            analysis=analysis,
-            question=question,
-            marks=expected_marks,
-        )
+                return enrich_images(improved, question)
+            except Exception as loop_exc:
+                last_error = loop_exc
+                logger.warning("Generation with model %s failed (possibly JSON error): %s", m, loop_exc)
 
-        return enrich_images(improved, question)
+        # If all models fail, raise the last error so it falls into the outer exception handler
+        raise last_error if last_error else RuntimeError("All models failed")
 
     except Exception as exc:
         logger.exception("OpenRouter answer generation failed: %s", exc)

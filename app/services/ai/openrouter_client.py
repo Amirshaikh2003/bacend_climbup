@@ -17,26 +17,27 @@ class OpenRouterError(RuntimeError):
 
 def chat_completion(
     messages: List[Dict[str, str]],
+    model: str | None = None,
     max_tokens: int = 4096,
     temperature: float = 0.25,
 ) -> str:
     if not settings.OPENROUTER_API_KEY:
         raise OpenRouterError("OPENROUTER API key is missing in backend/.env")
 
+    models_to_try = [model] if model else [settings.OPENROUTER_MODEL, settings.OPENROUTER_MODEL_FALLBACK]
+    
     last_error: Exception | None = None
-    models = [settings.OPENROUTER_MODEL, settings.OPENROUTER_MODEL_FALLBACK]
-
-    for model in dict.fromkeys(model for model in models if model):
+    for m in dict.fromkeys(m for m in models_to_try if m):
         try:
             return _chat_completion_for_model(
-                model=model,
+                model=m,
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
         except Exception as exc:
             last_error = exc
-            logger.warning("OpenRouter model %s failed: %s", model, exc)
+            logger.warning("OpenRouter model %s failed: %s", m, exc)
 
     raise OpenRouterError(f"All OpenRouter models failed: {last_error}")
 
