@@ -2505,6 +2505,8 @@ def generate_answer_via_gemini_strict(
     try:
         from app.services.ai.gemini_client import chat_completion as gemini_call
         
+        system_prompt = get_system_prompt_with_image_policy(analysis, question)
+        
         raw = gemini_call(
             messages=[
                 {"role": "system", "content": system_prompt},
