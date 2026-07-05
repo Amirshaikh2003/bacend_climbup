@@ -319,16 +319,16 @@ def extract_diagrams_from_page(page, page_number: int, temp_dir: str):
         aspect = w / float(h)
         density = cv2.countNonZero(binary[y:y + h, x:x + w]) / area
 
-        if area < 65000:
+        if area < 20000:
             continue
 
         if area > page_area * 0.65:
             continue
 
-        if aspect > 5.8:
+        if aspect > 7.0:
             continue
 
-        if h < 110:
+        if h < 60:
             continue
 
         if density > 0.44:
