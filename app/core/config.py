@@ -22,7 +22,7 @@ class Settings:
     OPENROUTER_MODELS_POOL: list[str] = [
         m.strip() for m in os.getenv(
             "OPENROUTER_MODELS_POOL",
-            "meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-lite-preview-02-05:free,qwen/qwen-2.5-72b-instruct:free,deepseek/deepseek-r1-distill-llama-70b:free"
+            "meta-llama/llama-3.3-70b-instruct:free,qwen/qwen3-next-80b-a3b-instruct:free,google/gemma-4-31b-it:free,nousresearch/hermes-3-llama-3.1-405b:free"
         ).split(",") if m.strip()
     ]
     TAVILY_API_KEY: str | None = os.getenv("TAVILY_API_KEY")
