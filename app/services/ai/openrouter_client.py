@@ -24,8 +24,13 @@ def chat_completion(
     if not settings.OPENROUTER_API_KEY:
         raise OpenRouterError("OPENROUTER API key is missing in backend/.env")
 
-    models_to_try = [model] if model else [settings.OPENROUTER_MODEL, settings.OPENROUTER_MODEL_FALLBACK]
+    models_to_try = [model] if model else settings.OPENROUTER_MODELS_POOL
     
+    import random
+    if not model and len(models_to_try) > 1:
+        models_to_try = list(models_to_try)
+        random.shuffle(models_to_try)
+
     last_error: Exception | None = None
     for m in dict.fromkeys(m for m in models_to_try if m):
         try:

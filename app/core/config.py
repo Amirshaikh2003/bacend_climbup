@@ -19,11 +19,12 @@ class Settings:
         or os.getenv("OPENROUTER", "").strip()
         or None
     )
-    OPENROUTER_MODEL: str = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct")
-    OPENROUTER_MODEL_FALLBACK: str = os.getenv(
-        "OPENROUTER_MODEL_FALLBACK",
-        "deepseek/deepseek-r1-distill-llama-70b",
-    )
+    OPENROUTER_MODELS_POOL: list[str] = [
+        m.strip() for m in os.getenv(
+            "OPENROUTER_MODELS_POOL",
+            "meta-llama/llama-3.3-70b-instruct:free,google/gemini-2.0-flash-lite-preview-02-05:free,qwen/qwen-2.5-72b-instruct:free,deepseek/deepseek-r1-distill-llama-70b:free"
+        ).split(",") if m.strip()
+    ]
     TAVILY_API_KEY: str | None = os.getenv("TAVILY_API_KEY")
     GEMINI_API_KEY: str | None = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")

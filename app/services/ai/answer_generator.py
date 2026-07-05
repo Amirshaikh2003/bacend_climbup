@@ -2441,7 +2441,9 @@ def generate_answer_via_openrouter(
     try:
         from app.core.config import settings
         system_prompt = get_system_prompt_with_image_policy(analysis, question)
-        models_to_try = [settings.OPENROUTER_MODEL, settings.OPENROUTER_MODEL_FALLBACK]
+        models_to_try = list(settings.OPENROUTER_MODELS_POOL)
+        import random
+        random.shuffle(models_to_try)
         
         last_error = None
         for m in dict.fromkeys(m for m in models_to_try if m):
