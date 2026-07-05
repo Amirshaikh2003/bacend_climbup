@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from app.services.pdf_extractor import process_pdf_file, upload_raw_pdf_to_cloudinary
 
 from app.services.ai.question_analyzer import analyze_question
-from app.services.ai.answer_generator import generate_answer_via_openrouter
+from app.services.ai.answer_generator import generate_answer_via_openrouter, generate_answer_via_gemini_strict
 from app.services.ai.openrouter_client import OpenRouterError, chat_completion
 from app.services.supabase_service import (
     SupabaseStorageError,
@@ -213,7 +213,7 @@ async def generate_answer():
     question = """Explain CPU scheduling algorithms, compare FCFS, SJF, Priority, and Round Robin, and calculate the average waiting time for a given set of processes."""
     try:
         analysis = await analyze_question(question)
-        answer = await asyncio.to_thread(generate_answer_via_openrouter, question, analysis)
+        answer = await asyncio.to_thread(generate_answer_via_gemini_strict, question, analysis)
 
         return {"success": True, "question": question, "analysis": analysis, "answer": answer}
 
@@ -267,7 +267,7 @@ async def generate_only_endpoint(payload: AnswerRequest):
             }
 
         analysis = {"status": "skipped", "reason": "manual answer provided"} if payload.manual_answer else await analyze_question(payload.question)
-        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_openrouter, payload.question, analysis)
+        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_gemini_strict, payload.question, analysis)
 
         storage_data = None
         if payload.question_id and not answer.get("is_error"):
@@ -399,7 +399,7 @@ async def answer_endpoint(payload: AnswerRequest):
             }
 
         analysis = {"status": "skipped", "reason": "manual answer provided"} if payload.manual_answer else await analyze_question(payload.question)
-        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_openrouter, payload.question, analysis)
+        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_gemini_strict, payload.question, analysis)
 
         if not answer.get("is_error"):
             storage = await asyncio.to_thread(

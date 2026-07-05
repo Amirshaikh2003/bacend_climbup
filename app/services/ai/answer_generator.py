@@ -2494,6 +2494,56 @@ def generate_answer_via_openrouter(
         }
 
 
+def generate_answer_via_gemini_strict(
+    question: str,
+    analysis: Optional[Dict[str, Any]],
+    expected_marks: int = 8,
+) -> Dict[str, Any]:
+    """
+    Generate the final answer using Google Gemini 2.0 Flash with Structured Outputs (Strict JSON).
+    """
+    try:
+        from app.services.ai.gemini_client import chat_completion as gemini_call
+        
+        raw = gemini_call(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": build_prompt(question, analysis, expected_marks),
+                },
+            ],
+            max_tokens=MAX_TOKENS,
+            temperature=0.22,
+            response_mime_type="application/json"
+        )
+
+        parsed = clean_json(raw)
+        validated = validate_output(parsed, question)
+        improved = apply_final_quality_layer(
+            payload=validated,
+            analysis=analysis,
+            question=question,
+            marks=expected_marks,
+        )
+
+        return enrich_images(improved, question)
+
+    except Exception as exc:
+        logger.error("Gemini strict answer generation failed: %s", exc, exc_info=True)
+        return {
+            "question": question,
+            "answer": [
+                {
+                    "type": "markdown",
+                    "title": "⚠️ AI Limit Reached",
+                    "content": "Our AI service has currently reached its token or usage limit, or the generation was unexpectedly interrupted. Please try again in a few moments, or break your question down into smaller parts.",
+                }
+            ],
+            "is_error": True
+        }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Dev Smoke Test
 # ─────────────────────────────────────────────────────────────────────────────

@@ -145,18 +145,23 @@ def _gemini_request(
     system_instruction: Optional[dict],
     max_tokens: int,
     temperature: float,
+    response_mime_type: Optional[str] = None,
     retries: int = 3,
 ) -> str:
     """Send a generateContent request to Gemini and return the text."""
     api_key = _get_api_key()
     model = _get_model()
 
+    generation_config = {
+        "temperature": temperature,
+        "maxOutputTokens": max_tokens,
+    }
+    if response_mime_type:
+        generation_config["responseMimeType"] = response_mime_type
+
     payload: dict = {
         "contents": contents,
-        "generationConfig": {
-            "temperature": temperature,
-            "maxOutputTokens": max_tokens,
-        },
+        "generationConfig": generation_config,
     }
     if system_instruction:
         payload["systemInstruction"] = system_instruction
@@ -217,13 +222,14 @@ def chat_completion(
     messages: List[Dict[str, str]],
     max_tokens: int = 8192,
     temperature: float = 0.25,
+    response_mime_type: Optional[str] = None,
 ) -> str:
     """
     Drop-in replacement for openrouter_client.chat_completion.
     Used by question_analyzer and answer_generator unchanged.
     """
     contents, system_instruction = _build_contents(messages)
-    return _gemini_request(contents, system_instruction, max_tokens, temperature)
+    return _gemini_request(contents, system_instruction, max_tokens, temperature, response_mime_type=response_mime_type)
 
 
 def chat_completion_with_images(
