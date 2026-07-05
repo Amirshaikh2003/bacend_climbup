@@ -15,38 +15,35 @@ _TIMEOUT     = 15  # seconds
 
 
 # ---------------------------------------------------------------------------
-# Core Google Custom Search API call
+# Core Tavily API call
 # ---------------------------------------------------------------------------
 
 def _fetch_image_url(search_query: str) -> Optional[str]:
     """Return the first usable image URL for *search_query*, or None."""
-    api_key = os.getenv("GOOGLE_SEARCH_API_KEY")
-    cx = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
+    api_key = os.getenv("TAVILY_API_KEY")
     
-    if not api_key or not cx:
-        logger.warning("GOOGLE_SEARCH_API_KEY or GOOGLE_SEARCH_ENGINE_ID not set")
+    if not api_key:
+        logger.warning("TAVILY_API_KEY not set")
         return None
 
     try:
-        url = "https://www.googleapis.com/customsearch/v1"
-        params = {
-            "key": api_key,
-            "cx": cx,
-            "q": search_query,
-            "searchType": "image",
-            "num": 3,
-            "safe": "active",
+        url = "https://api.tavily.com/search"
+        payload = {
+            "api_key": api_key,
+            "query": search_query + " diagram",
+            "search_depth": "basic",
+            "include_images": True,
+            "max_results": 1
         }
-        resp = requests.get(url, params=params, timeout=_TIMEOUT, verify=False)
+        resp = requests.post(url, json=payload, timeout=_TIMEOUT, verify=False)
         resp.raise_for_status()
         
-        items = resp.json().get("items", [])
-        for img in items:
-            link = img.get("link")
-            if isinstance(link, str) and link.startswith("http"):
-                return link
+        images = resp.json().get("images", [])
+        if images and isinstance(images[0], str) and images[0].startswith("http"):
+            return images[0]
+            
     except Exception as exc:
-        logger.warning("Google Image fetch failed for %r: %s", search_query, exc)
+        logger.warning("Tavily Image fetch failed for %r: %s", search_query, exc)
 
     return None
 
