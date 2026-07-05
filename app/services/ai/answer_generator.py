@@ -2465,21 +2465,16 @@ def generate_answer_via_openrouter(
     except Exception as exc:
         logger.exception("OpenRouter answer generation failed: %s", exc)
 
-        fallback = fallback_answer(
-            question=question,
-            analysis=analysis,
-            marks=expected_marks,
-        )
-
-        validated_fallback = validate_output(fallback, question)
-        improved_fallback = apply_final_quality_layer(
-            payload=validated_fallback,
-            analysis=analysis,
-            question=question,
-            marks=expected_marks,
-        )
-
-        return enrich_images(improved_fallback, question)
+        return {
+            "question": question,
+            "answer": [
+                {
+                    "type": "markdown",
+                    "title": "⚠️ AI Limit Reached",
+                    "content": "Our AI service has currently reached its token or usage limit, or the generation was unexpectedly interrupted. Please try again in a few moments, or break your question down into smaller parts.",
+                }
+            ]
+        }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
