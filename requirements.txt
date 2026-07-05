@@ -10,3 +10,5 @@ opencv-python-headless
 numpy
 cloudinary
 python-multipart
+
+requests
