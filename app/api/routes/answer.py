@@ -270,7 +270,7 @@ async def generate_only_endpoint(payload: AnswerRequest):
         answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_openrouter, payload.question, analysis)
 
         storage_data = None
-        if payload.question_id:
+        if payload.question_id and not answer.get("is_error"):
             from app.services.supabase_service import store_ai_answer
             answer_row = await asyncio.to_thread(
                 store_ai_answer,
@@ -401,18 +401,21 @@ async def answer_endpoint(payload: AnswerRequest):
         analysis = {"status": "skipped", "reason": "manual answer provided"} if payload.manual_answer else await analyze_question(payload.question)
         answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_openrouter, payload.question, analysis)
 
-        storage = await asyncio.to_thread(
-            store_question_answer,
-            paper_id=paper_id,
-            question_text=payload.question,
-            answer=answer,
-            question_number=payload.question_number or payload.question_id or "Q1",
-            module=payload.module,
-            marks=payload.marks,
-            difficulty=payload.difficulty,
-            ai_model="manual" if payload.manual_answer else "openrouter",
-            image_urls=payload.image_urls,
-        )
+        if not answer.get("is_error"):
+            storage = await asyncio.to_thread(
+                store_question_answer,
+                paper_id=paper_id,
+                question_text=payload.question,
+                answer=answer,
+                question_number=payload.question_number or payload.question_id or "Q1",
+                module=payload.module,
+                marks=payload.marks,
+                difficulty=payload.difficulty,
+                ai_model="manual" if payload.manual_answer else "openrouter",
+                image_urls=payload.image_urls,
+            )
+        else:
+            storage = None
 
         return {
             "success": True,

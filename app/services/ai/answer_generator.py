@@ -2489,7 +2489,8 @@ def generate_answer_via_openrouter(
                     "title": "⚠️ AI Limit Reached",
                     "content": "Our AI service has currently reached its token or usage limit, or the generation was unexpectedly interrupted. Please try again in a few moments, or break your question down into smaller parts.",
                 }
-            ]
+            ],
+            "is_error": True
         }
 
 
