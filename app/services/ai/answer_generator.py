@@ -2567,7 +2567,7 @@ def generate_answer_via_groq(
                     "content": build_prompt(question, analysis, expected_marks),
                 },
             ],
-            max_tokens=MAX_TOKENS,
+            max_tokens=4000,
             temperature=0.22,
         )
 
