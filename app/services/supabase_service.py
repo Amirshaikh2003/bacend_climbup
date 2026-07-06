@@ -100,6 +100,56 @@ def _insert(table: str, payload: dict[str, Any]) -> dict[str, Any]:
     raise SupabaseStorageError(f"Supabase returned no row for {table}")
 
 
+def _select(table: str, query: str = "") -> list[dict[str, Any]]:
+    _require_config()
+    url = f"{SUPABASE_URL}/rest/v1/{table}"
+    if query:
+        url += f"?{query}"
+    
+    request = urllib.request.Request(
+        url,
+        headers={
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {SUPABASE_KEY}",
+            "Accept": "application/json",
+        },
+        method="GET",
+    )
+
+    import ssl
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+
+    try:
+        with urllib.request.urlopen(request, timeout=60, context=context) as response:
+            result = json.loads(response.read().decode("utf-8") or "[]")
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise SupabaseStorageError(
+            f"Supabase select failed for {table}: HTTP {exc.code} {body}"
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise SupabaseStorageError(
+            f"Cannot connect to Supabase for {table}: {exc.reason}"
+        ) from exc
+
+    return result if isinstance(result, list) else []
+
+
+def get_universities() -> list[dict[str, Any]]:
+    return _select("universities", "select=university_id,name")
+
+def get_branches(university_id: str) -> list[dict[str, Any]]:
+    return _select("branches", f"university_id=eq.{university_id}&select=branch_id,name")
+
+def get_semesters(branch_id: str) -> list[dict[str, Any]]:
+    return _select("semesters", f"branch_id=eq.{branch_id}&select=semester_id,semester_number")
+
+def get_subjects(semester_id: str) -> list[dict[str, Any]]:
+    return _select("subjects", f"semester_id=eq.{semester_id}&select=subject_id,name,code")
+
+
 def create_question_paper(
     *,
     subject_id: str,

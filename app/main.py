@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.answer import router as answer_router
-
+from app.api.routes.academic import router as academic_router
 
 app = FastAPI(
     title="AI Engineering Platform",
@@ -37,6 +37,11 @@ app.include_router(
     answer_router,
     prefix="/api",
     tags=["Question Papers and Answers"],
+)
+
+app.include_router(
+    academic_router,
+    prefix="/api",
 )
 
 
