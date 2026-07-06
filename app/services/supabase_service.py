@@ -138,16 +138,17 @@ def _select(table: str, query: str = "") -> list[dict[str, Any]]:
 
 
 def get_universities() -> list[dict[str, Any]]:
-    return _select("universities", "select=university_id,name")
+    return _select("universities", "select=university_id,university_name")
 
 def get_branches(university_id: str) -> list[dict[str, Any]]:
-    return _select("branches", f"university_id=eq.{university_id}&select=branch_id,name")
+    return _select("branches", f"university_id=eq.{university_id}&select=branch_id,branch_name")
 
 def get_semesters(branch_id: str) -> list[dict[str, Any]]:
-    return _select("semesters", f"branch_id=eq.{branch_id}&select=semester_id,semester_number")
+    # Semesters are 1 to 8 according to the DB schema
+    return [{"semester_id": i, "semester_number": i} for i in range(1, 9)]
 
-def get_subjects(semester_id: str) -> list[dict[str, Any]]:
-    return _select("subjects", f"semester_id=eq.{semester_id}&select=subject_id,name,code")
+def get_subjects(branch_id: str, semester: int) -> list[dict[str, Any]]:
+    return _select("subjects", f"branch_id=eq.{branch_id}&semester=eq.{semester}&select=subject_id,subject_name,subject_code")
 
 
 def create_question_paper(

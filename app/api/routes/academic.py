@@ -44,11 +44,11 @@ def list_semesters(branch_id: str):
         raise HTTPException(status_code=500, detail="Failed to fetch semesters")
 
 @router.get("/subjects")
-def list_subjects(semester_id: str):
-    if not semester_id:
-        raise HTTPException(status_code=400, detail="semester_id is required")
+def list_subjects(branch_id: str, semester_id: int):
+    if not branch_id or not semester_id:
+        raise HTTPException(status_code=400, detail="branch_id and semester_id are required")
     try:
-        data = get_subjects(semester_id)
+        data = get_subjects(branch_id, semester_id)
         return {"success": True, "subjects": data}
     except Exception as e:
         logger.error(f"Error fetching subjects: {e}")
