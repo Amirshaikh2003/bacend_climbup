@@ -2546,6 +2546,57 @@ def generate_answer_via_gemini_strict(
         }
 
 
+def generate_answer_via_groq(
+    question: str,
+    analysis: Optional[Dict[str, Any]],
+    expected_marks: int = 8,
+) -> Dict[str, Any]:
+    """
+    Generate the final answer using Groq API (Llama 3.3 70B).
+    """
+    try:
+        from app.services.ai.groq_client import chat_completion as groq_call
+        
+        system_prompt = get_system_prompt_with_image_policy(analysis, question)
+        
+        raw = groq_call(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": build_prompt(question, analysis, expected_marks),
+                },
+            ],
+            max_tokens=MAX_TOKENS,
+            temperature=0.22,
+        )
+
+        parsed = clean_json(raw)
+        validated = validate_output(parsed, question)
+        improved = apply_final_quality_layer(
+            payload=validated,
+            analysis=analysis,
+            question=question,
+            marks=expected_marks,
+        )
+
+        return enrich_images(improved, question)
+
+    except Exception as exc:
+        logger.error("Groq answer generation failed: %s", exc, exc_info=True)
+        return {
+            "question": question,
+            "answer": [
+                {
+                    "type": "markdown",
+                    "title": "⚠️ Groq AI Limit Reached",
+                    "content": "Our AI service has reached its strict 1 question per minute limit on Groq. Please wait for exactly 60 seconds before generating the next question.",
+                }
+            ],
+            "is_error": True
+        }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Dev Smoke Test
 # ─────────────────────────────────────────────────────────────────────────────
