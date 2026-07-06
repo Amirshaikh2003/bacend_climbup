@@ -334,6 +334,25 @@ def extract_diagrams_from_page(page, page_number: int, temp_dir: str):
         if density > 0.70:
             continue
 
+        # Filter out blocks that are primarily text
+        orig_x0, orig_y0 = x / zoom, y / zoom
+        orig_x1, orig_y1 = (x + w) / zoom, (y + h) / zoom
+        orig_area = (orig_x1 - orig_x0) * (orig_y1 - orig_y0)
+        
+        text_blocks = [b for b in page.get_text("blocks") if b[6] == 0]
+        text_overlap = 0
+        for b in text_blocks:
+            bx0, by0, bx1, by1 = b[:4]
+            ix0 = max(orig_x0, bx0)
+            iy0 = max(orig_y0, by0)
+            ix1 = min(orig_x1, bx1)
+            iy1 = min(orig_y1, by1)
+            if ix1 > ix0 and iy1 > iy0:
+                text_overlap += (ix1 - ix0) * (iy1 - iy0)
+                
+        if orig_area > 0 and (text_overlap / orig_area) > 0.45:
+            continue
+
         crop = image[y:y + h, x:x + w]
 
         filename = os.path.join(
