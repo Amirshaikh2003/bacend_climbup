@@ -213,7 +213,7 @@ async def generate_answer():
     question = """Explain CPU scheduling algorithms, compare FCFS, SJF, Priority, and Round Robin, and calculate the average waiting time for a given set of processes."""
     try:
         analysis = await analyze_question(question)
-        answer = await asyncio.to_thread(generate_answer_via_gemini_strict, question, analysis)
+        answer = await asyncio.to_thread(generate_answer_via_openrouter, question, analysis)
 
         return {"success": True, "question": question, "analysis": analysis, "answer": answer}
 
@@ -267,7 +267,7 @@ async def generate_only_endpoint(payload: AnswerRequest):
             }
 
         analysis = {"status": "skipped", "reason": "manual answer provided"} if payload.manual_answer else await analyze_question(payload.question)
-        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_gemini_strict, payload.question, analysis)
+        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_openrouter, payload.question, analysis)
 
         storage_data = None
         if payload.question_id and not answer.get("is_error"):
@@ -399,7 +399,7 @@ async def answer_endpoint(payload: AnswerRequest):
             }
 
         analysis = {"status": "skipped", "reason": "manual answer provided"} if payload.manual_answer else await analyze_question(payload.question)
-        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_gemini_strict, payload.question, analysis)
+        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_openrouter, payload.question, analysis)
 
         if not answer.get("is_error"):
             storage = await asyncio.to_thread(
