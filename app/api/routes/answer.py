@@ -56,8 +56,8 @@ class QuestionBatchPayload(BaseModel):
     marks: int = 5
     difficulty: str = "Easy"
     image_urls: list[str] | None = None
-    answer: dict | None = None
-    analysis: dict | None = None
+    answer: dict | str | None = None
+    analysis: dict | str | None = None
     skip_answer: bool = False
 
 class SaveEntirePaperRequest(BaseModel):
@@ -331,34 +331,42 @@ async def save_entire_paper_endpoint(payload: SaveEntirePaperRequest):
                 q_num = f"{original_q_num}_dup{counter}"
                 counter += 1
             seen_q_numbers.add(q_num)
+            
+            clean_question_text = q.question.replace("\x00", "")
 
-            if q.skip_answer:
-                # Store question without answer
-                await asyncio.to_thread(
-                    create_question,
-                    paper_id=paper_id,
-                    question_number=q_num,
-                    module=q.module,
-                    marks=q.marks,
-                    difficulty=q.difficulty,
-                    question_text=q.question,
-                    image_urls=q.image_urls,
-                )
-                saved_questions.append(q_num)
-            else:
-                await asyncio.to_thread(
-                    store_question_answer,
-                    paper_id=paper_id,
-                    question_text=q.question,
-                    answer=q.answer or {"answer": "No answer provided"},
-                    question_number=q_num,
-                    module=q.module,
-                    marks=q.marks,
-                    difficulty=q.difficulty,
-                    ai_model="openrouter",
-                    image_urls=q.image_urls,
-                )
-                saved_questions.append(q_num)
+            try:
+                if q.skip_answer:
+                    # Store question without answer
+                    await asyncio.to_thread(
+                        create_question,
+                        paper_id=paper_id,
+                        question_number=q_num,
+                        module=q.module,
+                        marks=q.marks,
+                        difficulty=q.difficulty,
+                        question_text=clean_question_text,
+                        image_urls=q.image_urls,
+                    )
+                    saved_questions.append(q_num)
+                else:
+                    await asyncio.to_thread(
+                        store_question_answer,
+                        paper_id=paper_id,
+                        question_text=clean_question_text,
+                        answer=q.answer or {"answer": "No answer provided"},
+                        question_number=q_num,
+                        module=q.module,
+                        marks=q.marks,
+                        difficulty=q.difficulty,
+                        ai_model="openrouter",
+                        image_urls=q.image_urls,
+                    )
+                    saved_questions.append(q_num)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).error(f"Failed to save question {q_num}: {str(e)}")
+                # Continue with the next question instead of failing the whole batch
+                continue
 
         return {
             "success": True,

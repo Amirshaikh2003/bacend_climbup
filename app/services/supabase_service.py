@@ -212,7 +212,7 @@ def create_question(
 def store_ai_answer(
     *,
     question_id: str,
-    answer: dict[str, Any],
+    answer: dict[str, Any] | str,
     ai_model: str = "openrouter",
 ) -> dict[str, Any]:
     return _insert(
@@ -229,7 +229,7 @@ def store_question_answer(
     *,
     paper_id: str,
     question_text: str,
-    answer: dict[str, Any],
+    answer: dict[str, Any] | str,
     question_number: str = "Q1",
     module: str = "Module 1",
     marks: int = 5,
