@@ -56,8 +56,32 @@ BAD_LINE_PATTERNS = [
 # TEXT CLEANING
 # =========================
 
+# Mapping for common PDF PUA (Private Use Area) characters that correspond to the Adobe Symbol font.
+PUA_SYMBOL_MAP = {
+    "\uf022": "∀", "\uf024": "∃", "\uf02A": "∗", "\uf02D": "−",
+    "\uf040": "≅", "\uf041": "Α", "\uf042": "Β", "\uf043": "Χ",
+    "\uf044": "Δ", "\uf045": "Ε", "\uf046": "Φ", "\uf047": "Γ",
+    "\uf048": "Η", "\uf049": "Ι", "\uf04A": "ϑ", "\uf04B": "Κ",
+    "\uf04C": "Λ", "\uf04D": "Μ", "\uf04E": "Ν", "\uf04F": "Ο",
+    "\uf050": "Π", "\uf051": "Θ", "\uf052": "Ρ", "\uf053": "Σ",
+    "\uf054": "Τ", "\uf055": "Υ", "\uf056": "ς", "\uf057": "Ω",
+    "\uf058": "Ξ", "\uf059": "Ψ", "\uf05A": "Ζ", "\uf05C": "∴",
+    "\uf05E": "⊥", "\uf061": "α", "\uf062": "β", "\uf063": "χ",
+    "\uf064": "δ", "\uf065": "ε", "\uf066": "φ", "\uf067": "γ",
+    "\uf068": "η", "\uf069": "ι", "\uf06A": "ϕ", "\uf06B": "κ",
+    "\uf06C": "λ", "\uf06D": "μ", "\uf06E": "ν", "\uf06F": "ο",
+    "\uf070": "π", "\uf071": "θ", "\uf072": "ρ", "\uf073": "σ",
+    "\uf074": "τ", "\uf075": "υ", "\uf076": "ϖ", "\uf077": "ω",
+    "\uf078": "ξ", "\uf079": "ψ", "\uf07A": "ζ",
+    
+    # Also add the standard Omega symbol that sometimes gets extracted as Ohm
+    "Ω": "Ω",
+}
+
 def clean_text(text: str) -> str:
-    text = text.replace("Ω", "Ω")
+    # Translate PUA symbols to actual Unicode math/greek symbols
+    for pua_char, unicode_char in PUA_SYMBOL_MAP.items():
+        text = text.replace(pua_char, unicode_char)
     
     # Remove watermarks
     text = re.sub(r"Kabir\s*\(Aditya\s*Rathod\)?", "", text, flags=re.I)
