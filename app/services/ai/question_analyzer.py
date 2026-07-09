@@ -1307,7 +1307,7 @@ async def analyze_question(
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=1500,
+            max_tokens=3200,
             temperature=0.12,
         )
         parsed = clean_json_response(raw)

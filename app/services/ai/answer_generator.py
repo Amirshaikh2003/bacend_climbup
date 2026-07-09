@@ -1903,7 +1903,7 @@ def generate_answer_via_groq(
         try:
             raw = groq_call(
                 messages=messages,
-                max_tokens=3000,
+                max_tokens=8000,
                 temperature=0.22,
                 api_key=settings.GROQ_API_KEY_2,
             )
@@ -1912,7 +1912,7 @@ def generate_answer_via_groq(
             from app.services.ai.gemini_client import chat_completion as gemini_call
             raw = gemini_call(
                 messages=messages,
-                max_tokens=3000,
+                max_tokens=8000,
                 temperature=0.22,
             )
 
