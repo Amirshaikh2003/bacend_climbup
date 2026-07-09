@@ -1888,6 +1888,7 @@ def generate_answer_via_groq(
     """
     try:
         from app.services.ai.groq_client import chat_completion as groq_call
+        from app.core.config import settings
         
         system_prompt = select_system_prompt(analysis, question)
         
@@ -1904,6 +1905,7 @@ def generate_answer_via_groq(
                 messages=messages,
                 max_tokens=3000,
                 temperature=0.22,
+                api_key=settings.GROQ_API_KEY_2,
             )
         except Exception as groq_exc:
             logger.warning("Groq failed (%s), falling back to Gemini...", groq_exc)

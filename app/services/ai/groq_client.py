@@ -19,9 +19,11 @@ def chat_completion(
     messages: List[Dict[str, str]],
     max_tokens: int = 4096,
     temperature: float = 0.25,
+    api_key: str | None = None,
 ) -> str:
-    if not settings.GROQ_API_KEY:
-        raise GroqError("GROQ API key is missing in backend/.env")
+    key_to_use = api_key or settings.GROQ_API_KEY
+    if not key_to_use:
+        raise GroqError("GROQ API key is missing")
 
     last_error: Exception | None = None
     models = [settings.GROQ_MODEL, settings.GROQ_MODEL_FALLBACK]
@@ -33,6 +35,7 @@ def chat_completion(
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=temperature,
+                api_key=key_to_use,
             )
         except Exception as exc:
             last_error = exc
@@ -46,6 +49,7 @@ def _chat_completion_for_model(
     messages: List[Dict[str, str]],
     max_tokens: int,
     temperature: float,
+    api_key: str,
 ) -> str:
     payload = {
         "model": model,
@@ -58,7 +62,7 @@ def _chat_completion_for_model(
         GROQ_API_URL,
         data=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": f"Bearer {settings.GROQ_API_KEY}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
