@@ -858,12 +858,25 @@ def build_intro_block(answer_type: str) -> Dict[str, Any]:
 
 
 def build_image_block(visual_support: Dict[str, Any]) -> Dict[str, Any]:
+    visual_type = (visual_support.get("visual_type") or "diagram").lower()
+    
+    # Use mermaid for diagrams, flowcharts, architectures to ensure perfect text matching.
+    if any(keyword in visual_type for keyword in ["flowchart", "block diagram", "architecture", "diagram", "graph", "state machine"]):
+        return make_block(
+            "mermaid",
+            "Required Educational Diagram",
+            "Provide a highly detailed Mermaid.js diagram or flowchart that perfectly matches the components in your text.",
+            visual_support.get("diagram_labels", []),
+            diagram_type="flowchart",
+            visual_type=visual_type
+        )
+
     return make_block(
         "image",
         "Required Educational Diagram",
         "Provide the labelled diagram, graph, architecture, or visual support expected for full marks.",
         visual_support.get("diagram_labels", []),
-        visual_type=visual_support.get("visual_type"),
+        visual_type=visual_type,
         search_query=visual_support.get("image_search_query"),
         diagram_labels=visual_support.get("diagram_labels"),
         recommended_websites=visual_support.get("recommended_websites"),

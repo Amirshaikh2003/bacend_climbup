@@ -177,7 +177,7 @@ SPECIALIST_RULES = {
     "hierarchy": "HIERARCHY MODE: Use 'image' if visual_required. Explain each layer/level clearly in markdown or table.",
     "calculation": "NUMERICAL MODE: Use 'steps' block. Show Given Data -> Formula -> Substitution -> Final Answer with units.",
     "code": "CODE MODE: Use 'code' block. Include complete syntax & output. Use 'steps' or 'mermaid' for algorithm explanation if requested.",
-    "image": "VISUAL MODE: Use 'image' block for educational/architecture diagrams. Use 'mermaid' for logical flowcharts.",
+    "image": "VISUAL MODE: ALWAYS use 'mermaid' blocks for block diagrams, flowcharts, architectures, state machines, and graphs to ensure perfectly matching text! Only use 'image' for real photographs.",
     "text": "THEORY MODE: Use 'markdown'. For Applications/Advantages/Disadvantages use bullet points. Give technical reasons."
 }
 
@@ -200,7 +200,7 @@ LENGTH & QUALITY:
 
 ANALYZER RULES:
 Follow the provided ANALYZER for depth, blocks, and focus.
-- visual_required == true -> MUST include 'image' block (e.g. for ML lifecycle: 'machine learning workflow lifecycle steps diagram').
+- visual_required == true -> MUST include a 'mermaid' block (or 'image') to draw a detailed flowchart, architecture, or block diagram.
 
 BLOCK SCHEMAS (DO NOT DEVIATE):
 1. markdown: {{"type": "markdown", "title": "str", "content": "str"}} (Use ## headings, bold **terms**. No code/tables inside).
