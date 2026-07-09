@@ -1681,115 +1681,6 @@ def fallback_image_block(question: str, analysis: Dict[str, Any]) -> Dict[str, A
     }
 
 
-def build_image_blocks_from_analysis(
-    analysis: Dict[str, Any],
-    question: str,
-) -> List[Dict[str, Any]]:
-    visual = analysis.get("visual_support") if isinstance(analysis, dict) else {}
-    visual = visual if isinstance(visual, dict) else {}
-
-    raw_blocks = visual.get("image_blocks")
-    result: List[Dict[str, Any]] = []
-
-    if isinstance(raw_blocks, list):
-        for raw in raw_blocks[:MAX_GENERATED_IMAGE_BLOCKS]:
-            if not isinstance(raw, dict):
-                continue
-
-            title = coerce_string(raw.get("title") or raw.get("visual_type"))
-            query = coerce_string(raw.get("search_query") or raw.get("image_search_query"))
-
-            if not title and not query:
-                continue
-
-            result.append({
-                "type": "image",
-                "title": title or "Educational Diagram",
-                "search_query": query or f"{title} {question} educational diagram",
-                "recommended_websites": normalize_websites_for_image(
-                    raw.get("recommended_websites") or visual.get("recommended_websites")
-                ),
-                "visual_type": raw.get("visual_type") or visual.get("visual_type", "educational diagram"),
-                "diagram_labels": raw.get("diagram_labels") or visual.get("diagram_labels", []),
-            })
-
-    if not result:
-        result.append(fallback_image_block(question, analysis))
-
-    unique: List[Dict[str, Any]] = []
-    seen = set()
-
-    for block in result:
-        key = image_identity(block)
-        if key and key not in seen:
-            seen.add(key)
-            unique.append(block)
-
-    return unique[:MAX_GENERATED_IMAGE_BLOCKS]
-
-
-def insert_images_at_best_position(
-    blocks: List[Dict[str, Any]],
-    image_blocks: List[Dict[str, Any]],
-    analysis: Dict[str, Any],
-    question: str,
-) -> List[Dict[str, Any]]:
-    if not image_blocks:
-        return blocks
-
-    answer_type = get_analysis_answer_type(analysis, question)
-
-    if answer_type == "comparison":
-        for index, block in enumerate(blocks):
-            if block.get("type") == "table":
-                return blocks[:index] + image_blocks + blocks[index:]
-
-    if answer_type in {"process", "sequence", "algorithm"}:
-        for index, block in enumerate(blocks):
-            if block.get("type") == "steps":
-                return blocks[:index] + image_blocks + blocks[index:]
-
-    for index, block in enumerate(blocks):
-        if block.get("type") == "markdown":
-            title = coerce_string(block.get("title")).lower()
-            if "intro" in title or "definition" in title:
-                return blocks[: index + 1] + image_blocks + blocks[index + 1:]
-
-    return image_blocks + blocks
-
-
-def ensure_global_image_blocks(
-    blocks: List[Dict[str, Any]],
-    analysis: Dict[str, Any],
-    question: str,
-) -> List[Dict[str, Any]]:
-    if not ALWAYS_REQUIRE_IMAGE_BLOCK:
-        return blocks
-
-    required_images = build_image_blocks_from_analysis(analysis, question)
-
-    existing_keys = {
-        image_identity(block)
-        for block in blocks
-        if isinstance(block, dict) and block.get("type") == "image"
-    }
-
-    missing_images = [
-        image for image in required_images
-        if image_identity(image) not in existing_keys
-    ]
-
-    if not missing_images:
-        return blocks
-
-    return insert_images_at_best_position(
-        blocks=blocks,
-        image_blocks=missing_images,
-        analysis=analysis,
-        question=question,
-    )
-
-
 def apply_final_quality_layer(
     payload: Dict[str, Any],
     analysis: Dict[str, Any],
@@ -1798,16 +1689,9 @@ def apply_final_quality_layer(
 ) -> Dict[str, Any]:
     """
     Final answer post-processing without overriding existing functions.
-    It preserves all previous quality logic and only adds safe global image
-    enforcement after that logic completes.
+    It preserves all previous quality logic.
     """
-    payload = quality_postprocess_output(payload, analysis, question, marks)
-
-    blocks = payload.get("answer")
-    if isinstance(blocks, list):
-        payload["answer"] = ensure_global_image_blocks(blocks, analysis, question)
-
-    return payload
+    return quality_postprocess_output(payload, analysis, question, marks)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
