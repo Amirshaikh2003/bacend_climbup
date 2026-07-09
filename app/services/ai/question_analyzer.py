@@ -23,7 +23,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from app.services.ai.openrouter_client import chat_completion
+from app.services.ai.gemini_client import chat_completion
 
 logger = logging.getLogger(__name__)
 

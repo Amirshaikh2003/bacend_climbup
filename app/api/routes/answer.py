@@ -251,7 +251,7 @@ async def generate_answer():
     question = """Explain CPU scheduling algorithms, compare FCFS, SJF, Priority, and Round Robin, and calculate the average waiting time for a given set of processes."""
     try:
         analysis = await analyze_question(question)
-        answer = await asyncio.to_thread(generate_answer_via_groq, question, analysis)
+        answer = await asyncio.to_thread(generate_answer_via_gemini_strict, question, analysis)
 
         return {"success": True, "question": question, "analysis": analysis, "answer": answer}
 
@@ -304,8 +304,13 @@ async def generate_only_endpoint(payload: AnswerRequest):
                 "status": "skipped"
             }
 
-        analysis = {"status": "skipped", "reason": "manual answer provided"} if payload.manual_answer else await analyze_question(payload.question)
-        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_groq, payload.question, analysis)
+        # Safeguard against huge question payloads exhausting AI token limits
+        safe_question = payload.question
+        if safe_question and len(safe_question) > 3000:
+            safe_question = safe_question[:3000] + "... (truncated due to length)"
+
+        analysis = {"status": "skipped", "reason": "manual answer provided"} if payload.manual_answer else await analyze_question(safe_question)
+        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_gemini_strict, safe_question, analysis)
 
         storage_data = None
         if payload.question_id and not answer.get("is_error"):
@@ -445,7 +450,7 @@ async def answer_endpoint(payload: AnswerRequest):
             }
 
         analysis = {"status": "skipped", "reason": "manual answer provided"} if payload.manual_answer else await analyze_question(payload.question)
-        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_groq, payload.question, analysis)
+        answer = {"answer": payload.manual_answer} if payload.manual_answer else await asyncio.to_thread(generate_answer_via_gemini_strict, payload.question, analysis)
 
         if not answer.get("is_error"):
             storage = await asyncio.to_thread(
