@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes.answer import router as answer_router, public_router as public_answer_router
+from app.api.routes.answer import router as answer_router
 from app.api.routes.academic import router as academic_router
 from app.api.routes.auth import router as auth_router, verify_token
 from fastapi import Depends
@@ -40,11 +40,6 @@ app.include_router(
     prefix="/api",
     tags=["Question Papers and Answers"],
     dependencies=[Depends(verify_token)],
-)
-app.include_router(
-    public_answer_router,
-    prefix="/api",
-    tags=["Public Answers"],
 )
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 
