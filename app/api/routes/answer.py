@@ -6,7 +6,12 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
 
-from app.services.pdf_extractor import process_pdf_file, upload_raw_pdf_to_cloudinary
+from app.services.pdf_extractor import (
+    process_pdf_file, 
+    upload_raw_pdf_to_cloudinary,
+    upload_bytes_to_cloudinary,
+    delete_image_from_cloudinary
+)
 
 from app.services.ai.question_analyzer import analyze_question
 from app.services.ai.answer_generator import generate_answer_via_openrouter, generate_answer_via_gemini_strict, generate_answer_via_groq
@@ -19,6 +24,29 @@ from app.services.supabase_service import (
 )
 
 router = APIRouter()
+
+class DeleteImageRequest(BaseModel):
+    image_url: str
+
+@router.post("/delete-image")
+async def delete_image_endpoint(payload: DeleteImageRequest):
+    try:
+        success = await asyncio.to_thread(delete_image_from_cloudinary, payload.image_url)
+        if success:
+            return {"success": True, "message": "Image deleted successfully"}
+        else:
+            raise HTTPException(status_code=400, detail="Failed to delete image")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/upload-image")
+async def upload_image_endpoint(file: UploadFile = File(...)):
+    try:
+        image_bytes = await file.read()
+        url = await asyncio.to_thread(upload_bytes_to_cloudinary, image_bytes)
+        return {"success": True, "url": url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class AnswerRequest(BaseModel):

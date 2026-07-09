@@ -151,6 +151,39 @@ def upload_to_cloudinary(image_path: str) -> str:
     )
     return result["secure_url"]
 
+def upload_bytes_to_cloudinary(image_bytes: bytes) -> str:
+    result = cloudinary.uploader.upload(
+        image_bytes,
+        folder="question_paper_diagrams",
+        resource_type="image",
+    )
+    return result["secure_url"]
+
+def delete_image_from_cloudinary(image_url: str) -> bool:
+    try:
+        # Extract public_id from the Cloudinary URL.
+        # URLs look like: https://res.cloudinary.com/cloud_name/image/upload/v12345/folder/filename.png
+        # We need "folder/filename" without extension.
+        parts = image_url.split("/upload/")
+        if len(parts) == 2:
+            # Remove version if present
+            path = parts[1]
+            if path.startswith("v") and "/" in path:
+                # v123456/folder/filename.png -> folder/filename.png
+                parts2 = path.split("/", 1)
+                if parts2[0][1:].isdigit():
+                    path = parts2[1]
+            
+            # Remove extension
+            public_id = path.rsplit(".", 1)[0]
+            cloudinary.uploader.destroy(public_id)
+            return True
+        return False
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to delete image {image_url}: {e}")
+        return False
+
 def upload_raw_pdf_to_cloudinary(pdf_bytes: bytes, filename: str) -> str:
     file_obj = BytesIO(pdf_bytes)
     file_obj.name = filename  # Give it a name so Cloudinary knows it's a .pdf
