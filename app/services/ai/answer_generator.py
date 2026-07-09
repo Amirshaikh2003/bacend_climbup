@@ -1891,17 +1891,29 @@ def generate_answer_via_groq(
         
         system_prompt = select_system_prompt(analysis, question)
         
-        raw = groq_call(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {
-                    "role": "user",
-                    "content": build_prompt(question, analysis, expected_marks),
-                },
-            ],
-            max_tokens=8000,
-            temperature=0.22,
-        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": build_prompt(question, analysis, expected_marks),
+            },
+        ]
+        
+        try:
+            raw = groq_call(
+                messages=messages,
+                max_tokens=8000,
+                temperature=0.22,
+            )
+        except Exception as groq_exc:
+            logger.warning("Groq failed (%s), falling back to Gemini...", groq_exc)
+            from app.services.ai.gemini_client import chat_completion as gemini_call
+            raw = gemini_call(
+                messages=messages,
+                max_tokens=8000,
+                temperature=0.22,
+            )
+
 
         parsed = clean_json(raw)
         validated = validate_output(parsed, question)
