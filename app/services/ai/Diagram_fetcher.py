@@ -33,19 +33,24 @@ def _fetch_image_url(search_query: str) -> Optional[str]:
             "query": search_query + " diagram",
             "search_depth": "basic",
             "include_images": True,
-            "include_domains": ["geeksforgeeks.org", "tutorialspoint.com", "javatpoint.com", "wikipedia.org", "researchgate.net", "programiz.com", "w3schools.com"],
             "max_results": 1
         }
         resp = requests.post(url, json=payload, timeout=_TIMEOUT, verify=False)
         resp.raise_for_status()
         
         images = resp.json().get("images", [])
-        allowed_domains = ["geeksforgeeks.org", "tutorialspoint.com", "javatpoint.com", "wikipedia.org", "wikimedia.org", "researchgate.net", "programiz.com", "w3schools.com", "circuitdigest.com", "electronics-tutorials.ws"]
+        
+        blocked_keywords = [
+            "pinterest", "amazon", "flipkart", "shutterstock", "istockphoto", "gettyimages", 
+            "freepik", "alamy", "123rf", "dreamstime", "facebook", "instagram", "twitter", 
+            "tiktok", "news", "stock", "vector", "pngtree", "vecteezy", "ebay", "etsy"
+        ]
         
         for img in images:
             if isinstance(img, str) and img.startswith("http"):
-                # Ensure the image is actually hosted on an educational domain
-                if any(domain in img.lower() for domain in allowed_domains):
+                img_lower = img.lower()
+                # Ensure the image is NOT from a stock photo or e-commerce site
+                if not any(blocked in img_lower for blocked in blocked_keywords):
                     return img
                     
         return None  # No valid educational image found, fallback to mermaid
