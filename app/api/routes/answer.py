@@ -24,6 +24,7 @@ from app.services.supabase_service import (
 )
 
 router = APIRouter()
+public_router = APIRouter()
 
 class DeleteImageRequest(BaseModel):
     image_url: str
@@ -246,7 +247,7 @@ async def upload_paper_pdf_endpoint(file: UploadFile = File(...)):
         )
 
 
-@router.get("/generate-answer")
+@public_router.get("/generate-answer")
 async def generate_answer():
     question = """Explain CPU scheduling algorithms, compare FCFS, SJF, Priority, and Round Robin, and calculate the average waiting time for a given set of processes."""
     try:
@@ -294,7 +295,7 @@ async def question_paper_endpoint(payload: QuestionPaperRequest):
         raise HTTPException(status_code=500, detail=f"Question paper creation failed: {str(error)}")
 
 
-@router.post("/generate-only")
+@public_router.post("/generate-only")
 async def generate_only_endpoint(payload: AnswerRequest):
     try:
         if payload.skip_answer:
