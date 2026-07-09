@@ -40,8 +40,15 @@ def _fetch_image_url(search_query: str) -> Optional[str]:
         resp.raise_for_status()
         
         images = resp.json().get("images", [])
-        if images and isinstance(images[0], str) and images[0].startswith("http"):
-            return images[0]
+        allowed_domains = ["geeksforgeeks.org", "tutorialspoint.com", "javatpoint.com", "wikipedia.org", "wikimedia.org", "researchgate.net", "programiz.com", "w3schools.com", "circuitdigest.com", "electronics-tutorials.ws"]
+        
+        for img in images:
+            if isinstance(img, str) and img.startswith("http"):
+                # Ensure the image is actually hosted on an educational domain
+                if any(domain in img.lower() for domain in allowed_domains):
+                    return img
+                    
+        return None  # No valid educational image found, fallback to mermaid
             
     except Exception as exc:
         logger.warning("Tavily Image fetch failed for %r: %s", search_query, exc)
