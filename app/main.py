@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.answer import router as answer_router
 from app.api.routes.academic import router as academic_router
-from app.api.routes.auth import router as auth_router
+from app.api.routes.auth import router as auth_router, verify_token
+from fastapi import Depends
 
 app = FastAPI(
     title="AI Engineering Platform",
@@ -38,12 +39,15 @@ app.include_router(
     answer_router,
     prefix="/api",
     tags=["Question Papers and Answers"],
+    dependencies=[Depends(verify_token)],
 )
 app.include_router(auth_router, prefix="/api/auth", tags=["auth"])
 
 app.include_router(
     academic_router,
     prefix="/api",
+    tags=["Academic Hierarchy"],
+    dependencies=[Depends(verify_token)],
 )
 
 

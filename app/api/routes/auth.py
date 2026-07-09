@@ -5,9 +5,11 @@ import time
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from pydantic import BaseModel
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 router = APIRouter()
+security = HTTPBearer()
 
 ADMINS = {
     "Amir": "shaikhamir1003@gmail.com",
@@ -103,3 +105,13 @@ async def verify_otp(request: VerifyOtpRequest):
     
     # Return a simple mock token or success flag
     return {"success": True, "token": f"admin_token_{admin_name.lower()}", "admin_name": admin_name}
+
+async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    # Valid tokens are in the format admin_token_amir, admin_token_saloni, etc.
+    valid_tokens = [f"admin_token_{name.lower()}" for name in ADMINS.keys()]
+    
+    if token not in valid_tokens:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+    return token
