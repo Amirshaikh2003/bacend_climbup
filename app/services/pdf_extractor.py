@@ -34,8 +34,8 @@ cloudinary.config(
 # REGEX PATTERNS
 # =========================
 
-MAIN_SUB_RE = re.compile(r"^\s*(?:Q\s*\.?)?\s*(\d{1,2})\s*[\.\)]\s*(?:([a-z])\s*\))?\s*(.*)", re.I)
-SUB_RE = re.compile(r"^\s*(?:Q\s*\.?)?\s*([a-z])\s*\)\s*(.*)", re.I)
+MAIN_SUB_RE = re.compile(r"^\s*(?:Q\s*\.?)?\s*(\d{1,2})\s*[\.\)]\s*(?:([a-hj-uw-yz])\s*\))?\s*(.*)", re.I)
+SUB_RE = re.compile(r"^\s*(?:Q\s*\.?)?\s*([a-hj-uw-yz])\s*\)\s*(.*)", re.I)
 OR_RE = re.compile(r"^\s*OR\s*$", re.I)
 
 BAD_LINE_PATTERNS = [
@@ -132,7 +132,7 @@ def is_bad_line(text: str, has_mark: bool = False) -> bool:
         return True
 
     # Strip leading question number just for bad line check so patterns can match
-    text_no_num = re.sub(r"^(?:Q\s*\.?)?\s*\d{1,2}\s*[\.\)]\s*(?:[a-z]\s*\))?\s*", "", text, flags=re.I)
+    text_no_num = re.sub(r"^(?:Q\s*\.?)?\s*\d{1,2}\s*[\.\)]\s*(?:[a-hj-uw-yz]\s*\))?\s*", "", text, flags=re.I)
 
     for pattern in BAD_LINE_PATTERNS:
         if re.match(pattern, text_no_num, flags=re.I):
