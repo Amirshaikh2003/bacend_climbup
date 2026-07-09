@@ -162,20 +162,20 @@ def get_word_targets(marks: int) -> Tuple[int, int]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 BASE_JSON_RULES = """\
-You are a senior BE/BTech engineering professor & exam evaluator.
+You are a senior Engineering professor & exam evaluator across ALL branches (CSE, IT, Mech, Civil, Electrical, etc.).
 STRICT OUTPUT RULES:
 1. Return ONLY valid JSON format: {{"question": "str", "answer": [blocks]}}.
 2. Blocks allowed: markdown, image, table, steps, mermaid, code. NO other blocks.
 3. Every block must strictly follow its JSON schema.
-4. If analyzer.visual_support.visual_required is true, an 'image' block is MANDATORY.
+4. Images and mermaid blocks are OPTIONAL. Only use them if they heavily enhance the answer (e.g. system architectures, circuit diagrams, flowcharts). Do not use them for pure theory or math.
 5. Do NOT output any text outside the JSON. Do not stop mid-sentence.
 """
 
 SPECIALIST_RULES = {
     "comparison": "COMPARISON MODE: Must be table-dominant (Parameter, Concept 1, Concept 2). Short intro. 6-10 rows based on marks. No history unless asked.",
-    "process": "PROCESS MODE: Use 'steps' block. Detail each stage's cause/action/result. Include image if visual_required is true.",
-    "hierarchy": "HIERARCHY MODE: Use 'image' if visual_required. Explain each layer/level clearly in markdown or table.",
-    "calculation": "NUMERICAL MODE: Use 'steps' block. Show Given Data -> Formula -> Substitution -> Final Answer with units.",
+    "process": "PROCESS MODE: Use 'steps' block. Detail each stage's cause/action/result. Add a 'mermaid' flowchart if it clarifies the process.",
+    "hierarchy": "HIERARCHY MODE: Explain each layer/level clearly in markdown or table. Add an 'image' block if an architecture diagram is critical.",
+    "calculation": "NUMERICAL MODE: Use 'steps' block. Show Given Data -> Formula -> Step-by-Step Substitution -> Final Answer with units. No images.",
     "code": "CODE MODE: Use 'code' block. Include complete syntax & output. Use 'steps' or 'mermaid' for algorithm explanation if requested.",
     "image": "VISUAL MODE: Use 'image' block for educational/architecture diagrams. Use 'mermaid' for logical flowcharts.",
     "text": "THEORY MODE: Use 'markdown'. For Applications/Advantages/Disadvantages use bullet points. Give technical reasons."
@@ -200,7 +200,7 @@ LENGTH & QUALITY:
 
 ANALYZER RULES:
 Follow the provided ANALYZER for depth, blocks, and focus.
-- visual_required == true -> MUST include 'image' block (e.g. for ML lifecycle: 'machine learning workflow lifecycle steps diagram').
+- Only include an 'image' or 'mermaid' block if a diagram is GENUINELY REQUIRED or heavily enhances the answer (e.g., architecture, flowchart). Do NOT use them for purely mathematical, theoretical, or code questions.
 
 BLOCK SCHEMAS (DO NOT DEVIATE):
 1. markdown: {{"type": "markdown", "title": "str", "content": "str"}} (Use ## headings, bold **terms**. No code/tables inside).
@@ -210,7 +210,8 @@ BLOCK SCHEMAS (DO NOT DEVIATE):
 5. mermaid: {{"type": "mermaid", "title": "str", "diagram_type": "flowchart", "content": "valid syntax"}}
 6. code: {{"type": "code", "title": "str", "language": "str", "content": "code", "explanation": ["str"], "output": "str"}}
 
-ORDER: Intro -> Theory -> Image/Mermaid -> Components -> Working(steps) -> Code/Table -> Adv/Disadv -> Apps -> Conclusion.
+DYNAMIC STRUCTURE:
+Do NOT use a single rigid format. Dynamically structure your answer based on the subject and question type (e.g., Mathematical proofs need formulas/steps, CS needs code/architecture, Civil/Mech needs theory/diagrams). Arrange blocks logically for the highest exam score.
 
 CRITICAL: Return ONLY JSON.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1631,37 +1632,9 @@ def fallback_answer(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Mandatory Image Policy - Safe Layer
+# Mandatory Image Policy - Removed
 # ─────────────────────────────────────────────────────────────────────────────
-# This layer avoids monkey-patching/overriding older functions. It keeps the
-# same public function names and output schema, so routes and frontend structure
-# remain stable.
-
-ALWAYS_REQUIRE_IMAGE_BLOCK = True
-MAX_GENERATED_IMAGE_BLOCKS = 3
-
-GLOBAL_IMAGE_RULES = """
-
-GLOBAL IMAGE POLICY — STRICT:
-Every final answer must include at least one image block.
-Image blocks are fetch blueprints only. Do not include image URLs.
-Each image block must contain: type, title, search_query, recommended_websites.
-If analyzer.visual_support.image_blocks contains multiple image blocks, include useful blocks up to three.
-Place image blocks after introduction, before table for comparison answers, and before steps for process/algorithm answers.
-Do not remove table, code, steps, or mermaid blocks because of image blocks.
-"""
-
-
-def get_system_prompt_with_image_policy(
-    analysis: Dict[str, Any],
-    question: str = "",
-) -> str:
-    """
-    Safe wrapper around select_system_prompt.
-    It does not replace select_system_prompt, so other modules importing that
-    function will keep working exactly as before.
-    """
-    return select_system_prompt(analysis, question) + GLOBAL_IMAGE_RULES
+# Removed to allow dynamic formats based on subject context.
 
 
 def normalize_websites_for_image(websites: Any) -> List[str]:
@@ -1915,7 +1888,7 @@ def generate_answer_via_openrouter(
 
     try:
         from app.core.config import settings
-        system_prompt = get_system_prompt_with_image_policy(analysis, question)
+        system_prompt = select_system_prompt(analysis, question)
         models_to_try = list(settings.OPENROUTER_MODELS_POOL)
         import random
         random.shuffle(models_to_try)
@@ -1980,7 +1953,7 @@ def generate_answer_via_gemini_strict(
     try:
         from app.services.ai.gemini_client import chat_completion as gemini_call
         
-        system_prompt = get_system_prompt_with_image_policy(analysis, question)
+        system_prompt = select_system_prompt(analysis, question)
         
         raw = gemini_call(
             messages=[
@@ -2032,7 +2005,7 @@ def generate_answer_via_groq(
     try:
         from app.services.ai.groq_client import chat_completion as groq_call
         
-        system_prompt = get_system_prompt_with_image_policy(analysis, question)
+        system_prompt = select_system_prompt(analysis, question)
         
         raw = groq_call(
             messages=[

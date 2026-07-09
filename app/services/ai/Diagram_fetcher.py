@@ -97,7 +97,10 @@ def replace_image_blocks_with_urls(payload: Dict[str, Any]) -> Dict[str, Any]:
     for block in blocks:
         if isinstance(block, dict) and block.get("type") == "image":
             url = get_image_link_from_serpapi(block)
-            block = {**block, "url": url} if url else block  # non-destructive copy
+            if not url:
+                logger.info(f"Dropping image block, no URL found for: {block.get('search_query')}")
+                continue  # Drop the block entirely if no image is found
+            block = {**block, "url": url}
         updated.append(block)
 
     _write_back(updated)
