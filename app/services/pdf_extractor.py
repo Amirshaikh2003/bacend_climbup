@@ -34,8 +34,8 @@ cloudinary.config(
 # REGEX PATTERNS
 # =========================
 
-MAIN_SUB_RE = re.compile(r"^\s*(?:Q\.?)?\s*(\d{1,2})[\.\)]\s*(?:([a-d])\))?\s*(.*)", re.I)
-SUB_RE = re.compile(r"^\s*(?:Q\.?)?\s*([a-d])\)\s*(.*)", re.I)
+MAIN_SUB_RE = re.compile(r"^\s*(?:Q\s*\.?)?\s*(\d{1,2})\s*[\.\)]\s*(?:([a-hj-uw-yz])\s*\))?\s*(.*)", re.I)
+SUB_RE = re.compile(r"^\s*(?:Q\s*\.?)?\s*([a-hj-uw-yz])\s*\)\s*(.*)", re.I)
 OR_RE = re.compile(r"^\s*OR\s*$", re.I)
 
 BAD_LINE_PATTERNS = [
@@ -99,7 +99,7 @@ def clean_text(text: str) -> str:
 
     return text
 
-def is_bad_line(text: str) -> bool:
+def is_bad_line(text: str, has_mark: bool = False) -> bool:
     text_lower = text.lower()
     if "time : " in text_lower or "max. marks" in text_lower:
         return True
@@ -125,13 +125,13 @@ def is_bad_line(text: str) -> bool:
     text = clean_text(text)
 
     if not text:
-        return True
+        return not has_mark
 
     if re.fullmatch(r"\d+", text):
         return True
 
     # Strip leading question number just for bad line check so patterns can match
-    text_no_num = re.sub(r"^(?:Q\.?)?\s*\d{1,2}[\.\)]\s*(?:[a-d]\))?\s*", "", text, flags=re.I)
+    text_no_num = re.sub(r"^(?:Q\s*\.?)?\s*\d{1,2}\s*[\.\)]\s*(?:[a-hj-uw-yz]\s*\))?\s*", "", text, flags=re.I)
 
     for pattern in BAD_LINE_PATTERNS:
         if re.match(pattern, text_no_num, flags=re.I):
@@ -198,7 +198,7 @@ def upload_raw_pdf_to_cloudinary(pdf_bytes: bytes, filename: str) -> str:
 # PDF TEXT LINE EXTRACTION
 # =========================
 
-def get_page_lines(page):
+def get_page_lines(page, page_diagrams):
     words = page.get_text("words")
     page_w = page.rect.width
     page_h = page.rect.height
@@ -209,7 +209,21 @@ def get_page_lines(page):
         x0, y0, x1, y1, text, *_ = word
 
         # Header/footer ignore
-        if y0 < 55 or y0 > page_h - 35:
+        if y0 < 35 or y0 > page_h - 35:
+            continue
+
+        # Ignore words that are inside any diagram
+        inside_diagram = False
+        for diagram in page_diagrams:
+            dx0, dy0, dx1, dy1 = diagram["bbox"]
+            # Check if the center of the word falls inside the diagram
+            cx = (x0 + x1) / 2
+            cy = (y0 + y1) / 2
+            if dx0 <= cx <= dx1 and dy0 <= cy <= dy1:
+                inside_diagram = True
+                break
+        
+        if inside_diagram:
             continue
 
         row_key = round(y0 / 4) * 4
@@ -225,7 +239,7 @@ def get_page_lines(page):
 
         for x0, y0, x1, y1, text in row:
             # Right side marks detection
-            if x0 > page_w * 0.86 and text.isdigit():
+            if x0 > page_w * 0.82 and text.isdigit():
                 mark = int(text)
                 continue
 
@@ -233,7 +247,7 @@ def get_page_lines(page):
 
         text = clean_text(" ".join(text_words))
 
-        if is_bad_line(text):
+        if is_bad_line(text, has_mark=(mark is not None)):
             continue
 
         x0 = min(w[0] for w in row)
@@ -325,11 +339,9 @@ def extract_questions_from_lines(lines, page_width):
             continue
 
         if current:
-            # Diagram labels usually appear away from main question text.
-            if bbox[0] <= page_width * 0.34:
-                current["question"] += " " + text
-                current["_bbox"][2] = max(current["_bbox"][2], bbox[2])
-                current["_bbox"][3] = bbox[3]
+            current["question"] += " " + text
+            current["_bbox"][2] = max(current["_bbox"][2], bbox[2])
+            current["_bbox"][3] = bbox[3]
 
             if mark is not None:
                 current["marks"] = mark
@@ -518,13 +530,13 @@ def process_pdf_file(pdf_bytes: bytes, filename: str) -> dict:
         page_number = page_index + 1
         page = doc.load_page(page_index)
 
-        page_lines = get_page_lines(page)
+        page_diagrams = extract_diagrams_from_page(page, page_number, TEMP_DIR)
+        all_diagrams.extend(page_diagrams)
+
+        page_lines = get_page_lines(page, page_diagrams)
         for line in page_lines:
             line["page"] = page_number
         all_lines.extend(page_lines)
-
-        page_diagrams = extract_diagrams_from_page(page, page_number, TEMP_DIR)
-        all_diagrams.extend(page_diagrams)
 
     all_questions = extract_questions_from_lines(all_lines, page_width)
     attach_diagrams_to_questions(all_questions, all_diagrams)
