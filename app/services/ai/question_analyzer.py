@@ -1398,7 +1398,7 @@ def _primary_image_blueprint(question: str, answer_type: str) -> Dict[str, Any]:
 
     if answer_type == "comparison":
         return {
-            "type": "image",
+            "type": "mermaid",
             "title": "Conceptual Comparison Diagram",
             "visual_type": "conceptual comparison diagram",
             "search_query": f"{question} conceptual comparison diagram",
@@ -1411,7 +1411,7 @@ def _primary_image_blueprint(question: str, answer_type: str) -> Dict[str, Any]:
 
     if answer_type == "algorithm" or _keyword_in_question(question, "algorithm", "pseudocode", "binary search", "sorting"):
         return {
-            "type": "image",
+            "type": "mermaid",
             "title": "Algorithm Flowchart Diagram",
             "visual_type": "algorithm flowchart diagram",
             "search_query": f"{question} algorithm flowchart diagram",
@@ -1424,7 +1424,7 @@ def _primary_image_blueprint(question: str, answer_type: str) -> Dict[str, Any]:
 
     if answer_type == "code" or _keyword_in_question(question, "program", "code", "implementation"):
         return {
-            "type": "image",
+            "type": "mermaid",
             "title": "Program Logic Flow Diagram",
             "visual_type": "program logic flow diagram",
             "search_query": f"{question} program logic flowchart",
@@ -1476,7 +1476,7 @@ def _primary_image_blueprint(question: str, answer_type: str) -> Dict[str, Any]:
 
     if answer_type in {"calculation", "formula"}:
         return {
-            "type": "image",
+            "type": "mermaid",
             "title": "Formula / Concept Support Diagram",
             "visual_type": "formula or concept support diagram",
             "search_query": f"{question} formula concept diagram",
