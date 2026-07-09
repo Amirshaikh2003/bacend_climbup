@@ -33,6 +33,7 @@ def _fetch_image_url(search_query: str) -> Optional[str]:
             "query": search_query + " diagram",
             "search_depth": "basic",
             "include_images": True,
+            "include_domains": ["geeksforgeeks.org", "tutorialspoint.com", "javatpoint.com", "wikipedia.org", "researchgate.net", "programiz.com", "w3schools.com"],
             "max_results": 1
         }
         resp = requests.post(url, json=payload, timeout=_TIMEOUT, verify=False)
