@@ -108,10 +108,36 @@ async def verify_otp(request: VerifyOtpRequest):
 
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token = credentials.credentials
-    # Valid tokens are in the format admin_token_amir, admin_token_saloni, etc.
-    valid_tokens = [f"admin_token_{name.lower()}" for name in ADMINS.keys()]
-    
-    if token not in valid_tokens:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    # 1. Check if it's an admin token
+    valid_admin_tokens = [f"admin_token_{name.lower()}" for name in ADMINS.keys()]
+    if token in valid_admin_tokens:
+        return token
         
-    return token
+    # 2. Check if it's a valid Supabase User JWT
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    
+    if supabase_url and supabase_key:
+        import urllib.request
+        import urllib.error
+        import json
+        import asyncio
+        
+        url = f"{supabase_url}/auth/v1/user"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "apikey": supabase_key
+        }
+        
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            def fetch_user():
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    return json.loads(response.read().decode())
+            
+            await asyncio.to_thread(fetch_user)
+            return token  # Valid Supabase user token
+        except Exception:
+            pass  # Fall through to 401
+
+    raise HTTPException(status_code=401, detail="Invalid or expired token")
