@@ -34,8 +34,8 @@ cloudinary.config(
 # REGEX PATTERNS
 # =========================
 
-MAIN_SUB_RE = re.compile(r"^\s*(?:Q\.?)?\s*(\d{1,2})[\.\)]\s*(?:([a-d])\))?\s*(.*)", re.I)
-SUB_RE = re.compile(r"^\s*(?:Q\.?)?\s*([a-d])\)\s*(.*)", re.I)
+MAIN_SUB_RE = re.compile(r"^\s*(?:Q\s*\.?)?\s*(\d{1,2})\s*[\.\)]\s*(?:([a-z])\s*\))?\s*(.*)", re.I)
+SUB_RE = re.compile(r"^\s*(?:Q\s*\.?)?\s*([a-z])\s*\)\s*(.*)", re.I)
 OR_RE = re.compile(r"^\s*OR\s*$", re.I)
 
 BAD_LINE_PATTERNS = [
@@ -46,6 +46,7 @@ BAD_LINE_PATTERNS = [
     r"^B\.Tech",
     r"^ESC\d+",
     r"^BE\d+[a-zA-Z]+",
+    r"^TEE\d+[a-zA-Z]+",
     r"^P\. Pages",
     r"^Time\s*:",
     r"^Max\. Marks",
@@ -99,7 +100,7 @@ def clean_text(text: str) -> str:
 
     return text
 
-def is_bad_line(text: str) -> bool:
+def is_bad_line(text: str, has_mark: bool = False) -> bool:
     text_lower = text.lower()
     if "time : " in text_lower or "max. marks" in text_lower:
         return True
@@ -125,13 +126,13 @@ def is_bad_line(text: str) -> bool:
     text = clean_text(text)
 
     if not text:
-        return True
+        return not has_mark
 
     if re.fullmatch(r"\d+", text):
         return True
 
     # Strip leading question number just for bad line check so patterns can match
-    text_no_num = re.sub(r"^(?:Q\.?)?\s*\d{1,2}[\.\)]\s*(?:[a-d]\))?\s*", "", text, flags=re.I)
+    text_no_num = re.sub(r"^(?:Q\s*\.?)?\s*\d{1,2}\s*[\.\)]\s*(?:[a-z]\s*\))?\s*", "", text, flags=re.I)
 
     for pattern in BAD_LINE_PATTERNS:
         if re.match(pattern, text_no_num, flags=re.I):
@@ -225,7 +226,7 @@ def get_page_lines(page):
 
         for x0, y0, x1, y1, text in row:
             # Right side marks detection
-            if x0 > page_w * 0.86 and text.isdigit():
+            if x0 > page_w * 0.82 and text.isdigit():
                 mark = int(text)
                 continue
 
@@ -233,7 +234,7 @@ def get_page_lines(page):
 
         text = clean_text(" ".join(text_words))
 
-        if is_bad_line(text):
+        if is_bad_line(text, has_mark=(mark is not None)):
             continue
 
         x0 = min(w[0] for w in row)
@@ -325,11 +326,9 @@ def extract_questions_from_lines(lines, page_width):
             continue
 
         if current:
-            # Diagram labels usually appear away from main question text.
-            if bbox[0] <= page_width * 0.34:
-                current["question"] += " " + text
-                current["_bbox"][2] = max(current["_bbox"][2], bbox[2])
-                current["_bbox"][3] = bbox[3]
+            current["question"] += " " + text
+            current["_bbox"][2] = max(current["_bbox"][2], bbox[2])
+            current["_bbox"][3] = bbox[3]
 
             if mark is not None:
                 current["marks"] = mark
