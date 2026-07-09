@@ -466,13 +466,13 @@ def clean_json_response(raw: str) -> Dict[str, Any]:
     normalized = re.sub(r",\s*([}\]])", r"\1", normalized)
 
     try:
-        parsed = json.loads(normalized)
+        parsed = json.loads(normalized, strict=False)
         if isinstance(parsed, dict):
             return parsed
     except json.JSONDecodeError:
         pass
 
-    decoder = json.JSONDecoder()
+    decoder = json.JSONDecoder(strict=False)
     start = normalized.find("{")
     if start == -1:
         raise ValueError("No JSON object found in AI response")

@@ -285,10 +285,10 @@ def clean_json(raw: str) -> Dict[str, Any]:
     repaired = repair_json_string_escapes(json_text)
 
     try:
-        return json.loads(repaired)
+        return json.loads(repaired, strict=False)
     except json.JSONDecodeError as repaired_error:
         try:
-            return json.loads(json_text)
+            return json.loads(json_text, strict=False)
         except json.JSONDecodeError:
             raise repaired_error
 
@@ -319,8 +319,9 @@ def repair_json_string_escapes(text: str) -> str:
         if escaped:
             next_char = text[i + 1] if i + 1 < len(text) else ""
             looks_like_command = char.isalpha() and next_char.isalpha()
+            is_invalid_unicode = char == "u" and not (i + 4 < len(text) and all(c in "0123456789abcdefABCDEF" for c in text[i+1:i+5]))
 
-            if char not in valid_escapes or looks_like_command:
+            if char not in valid_escapes or looks_like_command or is_invalid_unicode:
                 output.append("\\")
 
             output.append(char)
