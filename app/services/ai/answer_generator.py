@@ -162,20 +162,20 @@ def get_word_targets(marks: int) -> Tuple[int, int]:
 # ─────────────────────────────────────────────────────────────────────────────
 
 BASE_JSON_RULES = """\
-You are a senior Engineering professor & exam evaluator across ALL branches (CSE, IT, Mech, Civil, Electrical, etc.).
+You are a senior BE/BTech engineering professor & exam evaluator.
 STRICT OUTPUT RULES:
 1. Return ONLY valid JSON format: {{"question": "str", "answer": [blocks]}}.
 2. Blocks allowed: markdown, image, table, steps, mermaid, code. NO other blocks.
 3. Every block must strictly follow its JSON schema.
-4. Images and mermaid blocks are OPTIONAL. Only use them if they heavily enhance the answer (e.g. system architectures, circuit diagrams, flowcharts). Do not use them for pure theory or math.
+4. If analyzer.visual_support.visual_required is true, an 'image' block is MANDATORY.
 5. Do NOT output any text outside the JSON. Do not stop mid-sentence.
 """
 
 SPECIALIST_RULES = {
     "comparison": "COMPARISON MODE: Must be table-dominant (Parameter, Concept 1, Concept 2). Short intro. 6-10 rows based on marks. No history unless asked.",
-    "process": "PROCESS MODE: Use 'steps' block. Detail each stage's cause/action/result. Add a 'mermaid' flowchart if it clarifies the process.",
-    "hierarchy": "HIERARCHY MODE: Explain each layer/level clearly in markdown or table. Add an 'image' block if an architecture diagram is critical.",
-    "calculation": "NUMERICAL MODE: Use 'steps' block. Show Given Data -> Formula -> Step-by-Step Substitution -> Final Answer with units. No images.",
+    "process": "PROCESS MODE: Use 'steps' block. Detail each stage's cause/action/result. Include image if visual_required is true.",
+    "hierarchy": "HIERARCHY MODE: Use 'image' if visual_required. Explain each layer/level clearly in markdown or table.",
+    "calculation": "NUMERICAL MODE: Use 'steps' block. Show Given Data -> Formula -> Substitution -> Final Answer with units.",
     "code": "CODE MODE: Use 'code' block. Include complete syntax & output. Use 'steps' or 'mermaid' for algorithm explanation if requested.",
     "image": "VISUAL MODE: Use 'image' block for educational/architecture diagrams. Use 'mermaid' for logical flowcharts.",
     "text": "THEORY MODE: Use 'markdown'. For Applications/Advantages/Disadvantages use bullet points. Give technical reasons."
@@ -200,7 +200,7 @@ LENGTH & QUALITY:
 
 ANALYZER RULES:
 Follow the provided ANALYZER for depth, blocks, and focus.
-- Only include an 'image' or 'mermaid' block if a diagram is GENUINELY REQUIRED or heavily enhances the answer (e.g., architecture, flowchart). Do NOT use them for purely mathematical, theoretical, or code questions.
+- visual_required == true -> MUST include 'image' block (e.g. for ML lifecycle: 'machine learning workflow lifecycle steps diagram').
 
 BLOCK SCHEMAS (DO NOT DEVIATE):
 1. markdown: {{"type": "markdown", "title": "str", "content": "str"}} (Use ## headings, bold **terms**. No code/tables inside).
@@ -210,8 +210,7 @@ BLOCK SCHEMAS (DO NOT DEVIATE):
 5. mermaid: {{"type": "mermaid", "title": "str", "diagram_type": "flowchart", "content": "valid syntax"}}
 6. code: {{"type": "code", "title": "str", "language": "str", "content": "code", "explanation": ["str"], "output": "str"}}
 
-DYNAMIC STRUCTURE:
-Do NOT use a single rigid format. Dynamically structure your answer based on the subject and question type (e.g., Mathematical proofs need formulas/steps, CS needs code/architecture, Civil/Mech needs theory/diagrams). Arrange blocks logically for the highest exam score.
+ORDER: Intro -> Theory -> Image/Mermaid -> Components -> Working(steps) -> Code/Table -> Adv/Disadv -> Apps -> Conclusion.
 
 CRITICAL: Return ONLY JSON.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1632,9 +1631,37 @@ def fallback_answer(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Mandatory Image Policy - Removed
+# Mandatory Image Policy - Safe Layer
 # ─────────────────────────────────────────────────────────────────────────────
-# Removed to allow dynamic formats based on subject context.
+# This layer avoids monkey-patching/overriding older functions. It keeps the
+# same public function names and output schema, so routes and frontend structure
+# remain stable.
+
+ALWAYS_REQUIRE_IMAGE_BLOCK = True
+MAX_GENERATED_IMAGE_BLOCKS = 3
+
+GLOBAL_IMAGE_RULES = """
+
+GLOBAL IMAGE POLICY — STRICT:
+Every final answer must include at least one image block.
+Image blocks are fetch blueprints only. Do not include image URLs.
+Each image block must contain: type, title, search_query, recommended_websites.
+If analyzer.visual_support.image_blocks contains multiple image blocks, include useful blocks up to three.
+Place image blocks after introduction, before table for comparison answers, and before steps for process/algorithm answers.
+Do not remove table, code, steps, or mermaid blocks because of image blocks.
+"""
+
+
+def get_system_prompt_with_image_policy(
+    analysis: Dict[str, Any],
+    question: str = "",
+) -> str:
+    """
+    Safe wrapper around select_system_prompt.
+    It does not replace select_system_prompt, so other modules importing that
+    function will keep working exactly as before.
+    """
+    return select_system_prompt(analysis, question) + GLOBAL_IMAGE_RULES
 
 
 def normalize_websites_for_image(websites: Any) -> List[str]:
@@ -1681,6 +1708,115 @@ def fallback_image_block(question: str, analysis: Dict[str, Any]) -> Dict[str, A
     }
 
 
+def build_image_blocks_from_analysis(
+    analysis: Dict[str, Any],
+    question: str,
+) -> List[Dict[str, Any]]:
+    visual = analysis.get("visual_support") if isinstance(analysis, dict) else {}
+    visual = visual if isinstance(visual, dict) else {}
+
+    raw_blocks = visual.get("image_blocks")
+    result: List[Dict[str, Any]] = []
+
+    if isinstance(raw_blocks, list):
+        for raw in raw_blocks[:MAX_GENERATED_IMAGE_BLOCKS]:
+            if not isinstance(raw, dict):
+                continue
+
+            title = coerce_string(raw.get("title") or raw.get("visual_type"))
+            query = coerce_string(raw.get("search_query") or raw.get("image_search_query"))
+
+            if not title and not query:
+                continue
+
+            result.append({
+                "type": "image",
+                "title": title or "Educational Diagram",
+                "search_query": query or f"{title} {question} educational diagram",
+                "recommended_websites": normalize_websites_for_image(
+                    raw.get("recommended_websites") or visual.get("recommended_websites")
+                ),
+                "visual_type": raw.get("visual_type") or visual.get("visual_type", "educational diagram"),
+                "diagram_labels": raw.get("diagram_labels") or visual.get("diagram_labels", []),
+            })
+
+    if not result:
+        result.append(fallback_image_block(question, analysis))
+
+    unique: List[Dict[str, Any]] = []
+    seen = set()
+
+    for block in result:
+        key = image_identity(block)
+        if key and key not in seen:
+            seen.add(key)
+            unique.append(block)
+
+    return unique[:MAX_GENERATED_IMAGE_BLOCKS]
+
+
+def insert_images_at_best_position(
+    blocks: List[Dict[str, Any]],
+    image_blocks: List[Dict[str, Any]],
+    analysis: Dict[str, Any],
+    question: str,
+) -> List[Dict[str, Any]]:
+    if not image_blocks:
+        return blocks
+
+    answer_type = get_analysis_answer_type(analysis, question)
+
+    if answer_type == "comparison":
+        for index, block in enumerate(blocks):
+            if block.get("type") == "table":
+                return blocks[:index] + image_blocks + blocks[index:]
+
+    if answer_type in {"process", "sequence", "algorithm"}:
+        for index, block in enumerate(blocks):
+            if block.get("type") == "steps":
+                return blocks[:index] + image_blocks + blocks[index:]
+
+    for index, block in enumerate(blocks):
+        if block.get("type") == "markdown":
+            title = coerce_string(block.get("title")).lower()
+            if "intro" in title or "definition" in title:
+                return blocks[: index + 1] + image_blocks + blocks[index + 1:]
+
+    return image_blocks + blocks
+
+
+def ensure_global_image_blocks(
+    blocks: List[Dict[str, Any]],
+    analysis: Dict[str, Any],
+    question: str,
+) -> List[Dict[str, Any]]:
+    if not ALWAYS_REQUIRE_IMAGE_BLOCK:
+        return blocks
+
+    required_images = build_image_blocks_from_analysis(analysis, question)
+
+    existing_keys = {
+        image_identity(block)
+        for block in blocks
+        if isinstance(block, dict) and block.get("type") == "image"
+    }
+
+    missing_images = [
+        image for image in required_images
+        if image_identity(image) not in existing_keys
+    ]
+
+    if not missing_images:
+        return blocks
+
+    return insert_images_at_best_position(
+        blocks=blocks,
+        image_blocks=missing_images,
+        analysis=analysis,
+        question=question,
+    )
+
+
 def apply_final_quality_layer(
     payload: Dict[str, Any],
     analysis: Dict[str, Any],
@@ -1689,9 +1825,16 @@ def apply_final_quality_layer(
 ) -> Dict[str, Any]:
     """
     Final answer post-processing without overriding existing functions.
-    It preserves all previous quality logic.
+    It preserves all previous quality logic and only adds safe global image
+    enforcement after that logic completes.
     """
-    return quality_postprocess_output(payload, analysis, question, marks)
+    payload = quality_postprocess_output(payload, analysis, question, marks)
+
+    blocks = payload.get("answer")
+    if isinstance(blocks, list):
+        payload["answer"] = ensure_global_image_blocks(blocks, analysis, question)
+
+    return payload
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1772,7 +1915,7 @@ def generate_answer_via_openrouter(
 
     try:
         from app.core.config import settings
-        system_prompt = select_system_prompt(analysis, question)
+        system_prompt = get_system_prompt_with_image_policy(analysis, question)
         models_to_try = list(settings.OPENROUTER_MODELS_POOL)
         import random
         random.shuffle(models_to_try)
@@ -1837,7 +1980,7 @@ def generate_answer_via_gemini_strict(
     try:
         from app.services.ai.gemini_client import chat_completion as gemini_call
         
-        system_prompt = select_system_prompt(analysis, question)
+        system_prompt = get_system_prompt_with_image_policy(analysis, question)
         
         raw = gemini_call(
             messages=[
@@ -1888,34 +2031,20 @@ def generate_answer_via_groq(
     """
     try:
         from app.services.ai.groq_client import chat_completion as groq_call
-        from app.core.config import settings
         
-        system_prompt = select_system_prompt(analysis, question)
+        system_prompt = get_system_prompt_with_image_policy(analysis, question)
         
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": build_prompt(question, analysis, expected_marks),
-            },
-        ]
-        
-        try:
-            raw = groq_call(
-                messages=messages,
-                max_tokens=8000,
-                temperature=0.22,
-                api_key=settings.GROQ_API_KEY_2,
-            )
-        except Exception as groq_exc:
-            logger.warning("Groq failed (%s), falling back to Gemini...", groq_exc)
-            from app.services.ai.gemini_client import chat_completion as gemini_call
-            raw = gemini_call(
-                messages=messages,
-                max_tokens=8000,
-                temperature=0.22,
-            )
-
+        raw = groq_call(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": build_prompt(question, analysis, expected_marks),
+                },
+            ],
+            max_tokens=8000,
+            temperature=0.22,
+        )
 
         parsed = clean_json(raw)
         validated = validate_output(parsed, question)
