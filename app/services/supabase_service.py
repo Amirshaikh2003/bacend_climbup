@@ -128,15 +128,20 @@ def _delete(table: str, match_column: str, match_value: str) -> bool:
         return False
 
 def delete_question_paper_cascade(paper_id: str) -> bool:
-    """Attempts to delete a question paper. If cascade is not on, this might fail, so we delete questions first."""
-    # First, try to fetch questions for this paper to delete their answers (if answers are linked to question_id)
-    # Actually, if we just delete questions by paper_id, it might fail if answers are linked.
-    # To be perfectly robust without knowing schema constraints:
-    _delete("answers", "paper_id", paper_id) # if answers has paper_id
-    # Wait, in store_question_answer it only provides question_id to answers table?
-    # Let's check store_ai_answer: question_id is passed. So we need a better approach or assume cascade.
-    # We will just try deleting the paper. If it fails, we delete questions.
+    """Attempts to delete a question paper and its associated questions and ai_answers."""
+    # 1. Fetch all questions for this paper to get their IDs
+    questions = _select("questions", f"paper_id=eq.{paper_id}")
+    
+    # 2. Delete all ai_answers for each question
+    for q in questions:
+        q_id = q.get("id") or q.get("question_id")
+        if q_id:
+            _delete("ai_answers", "question_id", q_id)
+            
+    # 3. Delete all questions for this paper
     _delete("questions", "paper_id", paper_id)
+    
+    # 4. Delete the question paper itself
     return _delete("question_papers", "paper_id", paper_id) or _delete("question_papers", "id", paper_id)
 
 
