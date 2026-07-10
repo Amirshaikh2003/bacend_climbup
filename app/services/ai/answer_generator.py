@@ -2013,13 +2013,24 @@ def generate_answer_via_gemini_strict(
 
     except Exception as exc:
         logger.error("Gemini strict answer generation failed: %s", exc, exc_info=True)
+        error_msg = str(exc)
+        if "429" in error_msg or "Quota" in error_msg or "ResourceExhausted" in error_msg:
+            title = "⚠️ AI Rate Limit Reached"
+            content = "Our AI service has reached its token or usage limit. Please wait a minute before trying again."
+        elif "JSON" in error_msg or "Expecting" in error_msg or "delimiter" in error_msg:
+            title = "⚠️ AI Formatting Error"
+            content = f"The AI generated an improperly formatted response (likely a JSON error). Please try again. Detail: {error_msg}"
+        else:
+            title = "⚠️ Generation Error"
+            content = f"An unexpected error occurred: {error_msg}"
+            
         return {
             "question": question,
             "answer": [
                 {
                     "type": "markdown",
-                    "title": "⚠️ AI Limit Reached",
-                    "content": "Our AI service has currently reached its token or usage limit, or the generation was unexpectedly interrupted. Please try again in a few moments, or break your question down into smaller parts.",
+                    "title": title,
+                    "content": content,
                 }
             ],
             "is_error": True
