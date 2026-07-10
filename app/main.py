@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.answer import router as answer_router
 from app.api.routes.academic import router as academic_router
 from app.api.routes.auth import router as auth_router, verify_token
+from app.api.routes.chat import router as chat_router
 from fastapi import Depends
 
 app = FastAPI(
@@ -47,6 +48,13 @@ app.include_router(
     academic_router,
     prefix="/api",
     tags=["Academic Hierarchy"],
+    dependencies=[Depends(verify_token)],
+)
+
+app.include_router(
+    chat_router,
+    prefix="/api",
+    tags=["Chatbot"],
     dependencies=[Depends(verify_token)],
 )
 
