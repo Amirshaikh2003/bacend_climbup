@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 
 SUPPORTED_BLOCK_TYPES = frozenset(
-    {"markdown", "table", "steps", "mermaid", "code"}
+    {"markdown", "image", "table", "steps", "mermaid", "code"}
 )
 
 SUPPORTED_MERMAID_TYPES = frozenset(
@@ -165,9 +165,9 @@ BASE_JSON_RULES = """\
 You are a senior BE/BTech engineering professor & exam evaluator.
 STRICT OUTPUT RULES:
 1. Return ONLY valid JSON format: {{"question": "str", "answer": [blocks]}}.
-2. Blocks allowed: markdown, table, steps, mermaid, code. NO other blocks.
+2. Blocks allowed: markdown, image, table, steps, mermaid, code. NO other blocks.
 3. Every block must strictly follow its JSON schema.
-4. If analyzer.visual_support.visual_required is true, a 'mermaid' block is MANDATORY.
+4. If analyzer.visual_support.visual_required is true, a 'mermaid' or 'image' block is MANDATORY.
 5. Do NOT output any text outside the JSON. Do not stop mid-sentence.
 """
 
@@ -177,7 +177,7 @@ SPECIALIST_RULES = {
     "hierarchy": "HIERARCHY MODE: Use 'mermaid' if visual_required. Explain each layer/level clearly in markdown or table.",
     "calculation": "NUMERICAL MODE: Use 'steps' block. Show Given Data -> Formula -> Substitution -> Final Answer with units.",
     "code": "CODE MODE: Use 'code' block. Include complete syntax & output. Use 'steps' or 'mermaid' for algorithm explanation if requested.",
-    "image": "VISUAL MODE: ALWAYS use 'mermaid' blocks for block diagrams, flowcharts, architectures, state machines, and graphs to ensure perfectly matching text! Do NOT use external images.",
+    "image": "VISUAL MODE: Use 'mermaid' for block diagrams, flowcharts, architectures, and abstract models. Use 'image' ONLY for physical hardware (e.g., Arduino, sensors, microprocessors). NEVER use 'image' for software or conceptual architectures.",
     "text": "THEORY MODE: Use 'markdown'. For Applications/Advantages/Disadvantages use bullet points. Give technical reasons."
 }
 
@@ -200,16 +200,17 @@ LENGTH & QUALITY:
 
 ANALYZER RULES:
 Follow the provided ANALYZER for depth, blocks, and focus.
-- visual_required == true -> MUST include a 'mermaid' block to draw a detailed flowchart, architecture, or block diagram.
+- visual_required == true -> MUST include a visual. Use 'mermaid' for flowcharts, conceptual architectures, and abstract models. Use 'image' ONLY for physical hardware and real-world devices (e.g., Arduino, sensors). NEVER use 'image' for conceptual models like OSI or IPsec.
 
 BLOCK SCHEMAS (DO NOT DEVIATE):
 1. markdown: {{"type": "markdown", "title": "str", "content": "str"}} (Use ## headings, bold **terms**. No code/tables inside).
-2. table: {{"type": "table", "title": "str", "columns": ["c1", "c2"], "rows": [["v1", "v2"]]}} (Rows must match columns count).
-3. steps: {{"type": "steps", "title": "str", "items": [{{"step": 1, "content": "str"}}]}}
-4. mermaid: {{"type": "mermaid", "title": "str", "diagram_type": "flowchart", "content": "valid syntax"}}
-5. code: {{"type": "code", "title": "str", "language": "str", "content": "code", "explanation": ["str"], "output": "str"}}
+2. image: {{"type": "image", "title": "str", "search_query": "str", "recommended_websites": ["site"]}} (Strictly for physical hardware).
+3. table: {{"type": "table", "title": "str", "columns": ["c1", "c2"], "rows": [["v1", "v2"]]}} (Rows must match columns count).
+4. steps: {{"type": "steps", "title": "str", "items": [{{"step": 1, "content": "str"}}]}}
+5. mermaid: {{"type": "mermaid", "title": "str", "diagram_type": "flowchart", "content": "valid syntax"}}
+6. code: {{"type": "code", "title": "str", "language": "str", "content": "code", "explanation": ["str"], "output": "str"}}
 
-ORDER: Intro -> Theory -> Mermaid -> Components -> Working(steps) -> Code/Table -> Adv/Disadv -> Apps -> Conclusion.
+ORDER: Intro -> Theory -> Mermaid/Image -> Components -> Working(steps) -> Code/Table -> Adv/Disadv -> Apps -> Conclusion.
 
 CRITICAL JSON REQUIREMENTS:
 - Return ONLY valid JSON. No markdown formatting outside the JSON.
