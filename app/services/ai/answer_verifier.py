@@ -21,10 +21,10 @@ ACCEPTANCE CRITERIA (Set is_valid to true):
 
 OUTPUT FORMAT:
 You MUST return ONLY valid JSON in the following format. Do NOT output any markdown, code blocks, or text outside the JSON.
-{
+{{
   "is_valid": true/false,
   "reason": "A short, polite explanation of why it was accepted or rejected (to be shown to the user)."
-}
+}}
 
 QUESTION:
 {question}
