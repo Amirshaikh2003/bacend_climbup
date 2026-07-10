@@ -131,7 +131,7 @@ RECOMMENDED_VISUAL_TOPIC_RULES = (
 )
 
 
-MAX_TOKENS = 15000
+MAX_TOKENS = 10000
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2043,7 +2043,7 @@ def generate_answer_via_groq(
                     "content": build_prompt(question, analysis, expected_marks),
                 },
             ],
-            max_tokens=7000,
+            max_tokens=10000,
             temperature=0.22,
         )
 
