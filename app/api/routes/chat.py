@@ -1,7 +1,8 @@
 import logging
 from fastapi import APIRouter, HTTPException
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.ai.groq_client import chat_completion
+from app.services.ai.groq_client import chat_completion as groq_chat_completion
+from app.services.ai.openrouter_client import chat_completion as openrouter_chat_completion
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +39,26 @@ async def chat_endpoint(request: ChatRequest):
             role = msg.role if msg.role in ["user", "assistant"] else "user"
             groq_messages.append({"role": role, "content": msg.content})
 
-        # Call Groq API
-        # Using a slightly higher temperature for chat to be conversational but accurate
-        reply = chat_completion(
-            messages=groq_messages,
-            max_tokens=2048,
-            temperature=0.4
-        )
+        # 1. Try Groq API first
+        try:
+            reply = groq_chat_completion(
+                messages=groq_messages,
+                max_tokens=2048,
+                temperature=0.4
+            )
+        except Exception as groq_err:
+            logger.warning(f"Groq API failed in Chatbot, falling back to OpenRouter: {groq_err}")
+            # 2. Try OpenRouter as Fallback
+            try:
+                reply = openrouter_chat_completion(
+                    messages=groq_messages,
+                    max_tokens=2048,
+                    temperature=0.4
+                )
+            except Exception as or_err:
+                logger.error(f"Both Groq and OpenRouter failed in Chatbot: {or_err}")
+                # 3. Return Friendly Message if both fail
+                reply = "Our servers are currently experiencing high load. Please try again after some time. Thank you for your patience!"
 
         return ChatResponse(success=True, reply=reply)
 
