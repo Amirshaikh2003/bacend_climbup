@@ -212,7 +212,11 @@ BLOCK SCHEMAS (DO NOT DEVIATE):
 
 ORDER: Intro -> Theory -> Image/Mermaid -> Components -> Working(steps) -> Code/Table -> Adv/Disadv -> Apps -> Conclusion.
 
-CRITICAL: Return ONLY JSON.
+CRITICAL JSON REQUIREMENTS:
+- Return ONLY valid JSON. No markdown formatting outside the JSON.
+- ESCAPE ALL DOUBLE QUOTES inside string values (e.g., use \\" instead of "). 
+- For Mermaid diagrams, you MUST escape quotes (e.g., node[\\"Label\\"]). Unescaped quotes will crash the parser!
+- Ensure all properties are properly enclosed in double quotes.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 QUESTION : {question}
 MARKS    : {marks}

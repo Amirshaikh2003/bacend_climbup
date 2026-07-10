@@ -298,8 +298,13 @@ Very important rules:
 5. Code questions must include complete code, explanation, sample output, and complexity if relevant.
 """
 
-USER_PROMPT_TEMPLATE = """
-Analyze this engineering exam question and return a dynamic answer blueprint.
+USER_PROMPT_TEMPLATE = """\
+Analyze the following university engineering question and return ONLY a highly detailed, valid JSON object matching the requested schema.
+
+CRITICAL JSON REQUIREMENTS:
+- Return ONLY valid JSON. No markdown formatting outside the JSON.
+- ESCAPE ALL DOUBLE QUOTES inside string values (e.g., use \\" instead of "). 
+- Ensure all properties are properly enclosed in double quotes and commas are correct.
 
 Question:
 {question}
