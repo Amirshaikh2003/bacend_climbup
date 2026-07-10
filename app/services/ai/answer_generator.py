@@ -1825,6 +1825,39 @@ def ensure_global_image_blocks(
     )
 
 
+def sanitize_mermaid_blocks(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Verifies mermaid blocks. If a mermaid block has invalid syntax (like quotes or brackets)
+    that would crash the frontend, it replaces it with a user-friendly markdown notice.
+    """
+    sanitized = []
+    valid_starts = ("graph", "flowchart", "sequenceDiagram", "classDiagram", "stateDiagram", "erDiagram", "gantt", "pie", "mindmap", "timeline")
+    
+    for block in blocks:
+        if isinstance(block, dict) and block.get("type") == "mermaid":
+            content = str(block.get("content", "")).strip()
+            title = block.get("title", "Diagram")
+            
+            is_valid = True
+            if not any(content.startswith(start) for start in valid_starts):
+                is_valid = False
+            elif '"' in content or '[' in content or ']' in content:
+                # We strictly forbade these in the prompt to avoid SQE errors
+                is_valid = False
+            
+            if not is_valid:
+                logger.warning(f"Mermaid validation failed for block '{title}'. Content: {content}")
+                sanitized.append({
+                    "type": "markdown",
+                    "title": f"⚠️ {title} (Unavailable)",
+                    "content": "*(The AI generated a visual diagram for this section, but it contained a formatting error and could not be rendered. Please refer to the textual explanation provided.)*"
+                })
+            else:
+                sanitized.append(block)
+        else:
+            sanitized.append(block)
+    return sanitized
+
 def apply_final_quality_layer(
     payload: Dict[str, Any],
     analysis: Dict[str, Any],
@@ -1840,7 +1873,9 @@ def apply_final_quality_layer(
 
     blocks = payload.get("answer")
     if isinstance(blocks, list):
-        payload["answer"] = ensure_global_image_blocks(blocks, analysis, question)
+        blocks = ensure_global_image_blocks(blocks, analysis, question)
+        blocks = sanitize_mermaid_blocks(blocks)
+        payload["answer"] = blocks
 
     return payload
 
