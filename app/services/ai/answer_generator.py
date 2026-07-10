@@ -212,11 +212,14 @@ BLOCK SCHEMAS (DO NOT DEVIATE):
 
 ORDER: Intro -> Theory -> Mermaid/Image -> Components -> Working(steps) -> Code/Table -> Adv/Disadv -> Apps -> Conclusion.
 
-CRITICAL JSON REQUIREMENTS:
+CRITICAL JSON & MERMAID REQUIREMENTS:
 - Return ONLY valid JSON. No markdown formatting outside the JSON.
 - ESCAPE ALL DOUBLE QUOTES inside string values (e.g., use \\" instead of "). 
-- For Mermaid diagrams, you MUST escape quotes (e.g., node[\\"Label\\"]). Unescaped quotes will crash the parser!
 - Ensure all properties are properly enclosed in double quotes.
+- FOR MERMAID: Keep node labels extremely simple. Do NOT use quotes (") inside Mermaid code.
+- FOR MERMAID: Do NOT use square brackets `[` or `]` inside node labels (use parenthesis `()` instead).
+- FOR MERMAID: Do NOT use special characters like `<`, `>`, `=`, `?`. Use plain English (e.g., `if x equals y` instead of `x == y?`).
+- FOR MERMAID: Each node connection must be on its own line.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 QUESTION : {question}
 MARKS    : {marks}
