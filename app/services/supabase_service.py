@@ -195,6 +195,10 @@ def get_semesters(branch_id: str) -> list[dict[str, Any]]:
 def get_subjects(branch_id: str, semester: int) -> list[dict[str, Any]]:
     return _select("subjects", f"branch_id=eq.{branch_id}&semester=eq.{semester}&select=subject_id,subject_name,subject_code")
 
+def get_all_question_papers() -> list[dict[str, Any]]:
+    # Select question papers along with their subjects for display
+    return _select("question_papers", "select=*,subjects(subject_name)&order=created_at.desc")
+
 
 def create_question_paper(
     *,

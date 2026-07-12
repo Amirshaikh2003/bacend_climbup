@@ -48,6 +48,16 @@ async def upload_image_endpoint(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/question-paper/list")
+async def list_question_papers_endpoint():
+    try:
+        from app.services.supabase_service import get_all_question_papers
+        papers = await asyncio.to_thread(get_all_question_papers)
+        return {"success": True, "papers": papers}
+    except Exception as error:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch question papers: {str(error)}")
+
+
 @router.delete("/question-paper/{paper_id}")
 async def delete_question_paper_endpoint(paper_id: str):
     from app.services.supabase_service import delete_question_paper_cascade
