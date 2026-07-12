@@ -2050,7 +2050,7 @@ def generate_answer_via_gemini_strict(
         logger.error("Gemini strict answer generation failed: %s", exc, exc_info=True)
         # User requested to show this specific error for ANY problem.
         title = "⚠️ AI Rate Limit Reached"
-        content = "Our AI service has reached its strict 1 question per minute limit on Groq. Please wait for exactly 60 seconds before generating the next question."
+        content = "Our AI service has reached its strict 1 question per minute limit on Climbup. Please wait for exactly 60 seconds before generating the next question."
             
         return {
             "question": question,
