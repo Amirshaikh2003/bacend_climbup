@@ -1,8 +1,11 @@
 import json
 import os
-import urllib.error
-import urllib.request
+import requests
+import urllib3
 from typing import Any
+from functools import lru_cache
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from dotenv import load_dotenv
 
@@ -11,9 +14,12 @@ from app.core.config import BASE_DIR
 
 load_dotenv(BASE_DIR / ".env")
 
-
 class SupabaseStorageError(RuntimeError):
     pass
+
+# Global session for connection pooling
+_session = requests.Session()
+_session.verify = False
 
 
 def _first_present(row: dict[str, Any], *keys: str) -> Any:
@@ -62,69 +68,54 @@ def _require_config() -> None:
 
 def _insert(table: str, payload: dict[str, Any]) -> dict[str, Any]:
     _require_config()
-    request = urllib.request.Request(
-        f"{SUPABASE_URL}/rest/v1/{table}",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "Prefer": "return=representation",
-        },
-        method="POST",
-    )
-
-    import ssl
-    context = ssl.create_default_context()
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
-
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Prefer": "return=representation",
+    }
     try:
-        with urllib.request.urlopen(request, timeout=60, context=context) as response:
-            result = json.loads(response.read().decode("utf-8") or "[]")
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
+        response = _session.post(
+            f"{SUPABASE_URL}/rest/v1/{table}",
+            json=payload,
+            headers=headers,
+            timeout=60
+        )
+        response.raise_for_status()
+        result = response.json()
+    except requests.exceptions.HTTPError as exc:
         raise SupabaseStorageError(
-            f"Supabase insert failed for {table}: HTTP {exc.code} {body}"
+            f"Supabase insert failed for {table}: HTTP {exc.response.status_code} {exc.response.text}"
         ) from exc
-    except urllib.error.URLError as exc:
-        raise SupabaseStorageError(
-            f"Cannot connect to Supabase for {table}: {exc.reason}"
-        ) from exc
+    except requests.exceptions.RequestException as exc:
+        raise SupabaseStorageError(f"Cannot connect to Supabase for {table}: {str(exc)}") from exc
 
     if isinstance(result, list) and result:
         return result[0]
     if isinstance(result, dict):
         return result
+    return {}
 def _delete(table: str, match_column: str, match_value: str) -> bool:
     _require_config()
-    request = urllib.request.Request(
-        f"{SUPABASE_URL}/rest/v1/{table}?{match_column}=eq.{match_value}",
-        headers={
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-        },
-        method="DELETE",
-    )
-
-    import ssl
-    context = ssl.create_default_context()
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
-
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+    }
     try:
-        with urllib.request.urlopen(request, timeout=60, context=context) as response:
-            return response.status in (200, 204)
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
+        response = _session.delete(
+            f"{SUPABASE_URL}/rest/v1/{table}?{match_column}=eq.{match_value}",
+            headers=headers,
+            timeout=60
+        )
+        return response.status_code in (200, 204)
+    except requests.exceptions.HTTPError as exc:
         import logging
-        logging.getLogger(__name__).error(f"Supabase delete failed for {table}: HTTP {exc.code} {body}")
-        # Might fail if cascade is not set up and there are children, but we return false
+        logging.getLogger(__name__).error(f"Supabase delete failed for {table}: HTTP {exc.response.status_code} {exc.response.text}")
         return False
-    except urllib.error.URLError as exc:
+    except requests.exceptions.RequestException as exc:
         import logging
-        logging.getLogger(__name__).error(f"Cannot connect to Supabase for {table}: {exc.reason}")
+        logging.getLogger(__name__).error(f"Cannot connect to Supabase for {table}: {str(exc)}")
         return False
 
 def delete_question_paper_cascade(paper_id: str) -> bool:
@@ -151,47 +142,42 @@ def _select(table: str, query: str = "") -> list[dict[str, Any]]:
     if query:
         url += f"?{query}"
     
-    request = urllib.request.Request(
-        url,
-        headers={
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-            "Accept": "application/json",
-        },
-        method="GET",
-    )
-
-    import ssl
-    context = ssl.create_default_context()
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Accept": "application/json",
+    }
 
     try:
-        with urllib.request.urlopen(request, timeout=60, context=context) as response:
-            result = json.loads(response.read().decode("utf-8") or "[]")
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
+        response = _session.get(url, headers=headers, timeout=60)
+        response.raise_for_status()
+        result = response.json()
+    except requests.exceptions.HTTPError as exc:
         raise SupabaseStorageError(
-            f"Supabase select failed for {table}: HTTP {exc.code} {body}"
+            f"Supabase select failed for {table}: HTTP {exc.response.status_code} {exc.response.text}"
         ) from exc
-    except urllib.error.URLError as exc:
+    except requests.exceptions.RequestException as exc:
         raise SupabaseStorageError(
-            f"Cannot connect to Supabase for {table}: {exc.reason}"
+            f"Cannot connect to Supabase for {table}: {str(exc)}"
         ) from exc
 
     return result if isinstance(result, list) else []
 
 
+@lru_cache(maxsize=128)
 def get_universities() -> list[dict[str, Any]]:
     return _select("universities", "select=university_id,university_name")
 
+@lru_cache(maxsize=128)
 def get_branches(university_id: str) -> list[dict[str, Any]]:
     return _select("branches", f"university_id=eq.{university_id}&select=branch_id,branch_name")
 
+@lru_cache(maxsize=128)
 def get_semesters(branch_id: str) -> list[dict[str, Any]]:
     # Semesters are 1 to 8 according to the DB schema
     return [{"semester_id": i, "semester_number": i} for i in range(1, 9)]
 
+@lru_cache(maxsize=128)
 def get_subjects(branch_id: str, semester: int) -> list[dict[str, Any]]:
     return _select("subjects", f"branch_id=eq.{branch_id}&semester=eq.{semester}&select=subject_id,subject_name,subject_code")
 
