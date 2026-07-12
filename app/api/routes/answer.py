@@ -378,7 +378,9 @@ async def save_entire_paper_endpoint(payload: SaveEntirePaperRequest):
             clean_question_text = q.question.replace("\x00", "")
 
             try:
-                if q.skip_answer:
+                # If skip_answer is true OR the answer has an error, do not save the answer
+                has_error = isinstance(q.answer, dict) and q.answer.get("is_error")
+                if q.skip_answer or has_error:
                     # Store question without answer
                     await asyncio.to_thread(
                         create_question,
@@ -473,10 +475,9 @@ async def answer_endpoint(payload: AnswerRequest):
             "question": payload.question,
             "analysis": analysis,
             "answer": answer,
-            "paper_id": storage["paper_id"],
-            "question_id": storage["question_id"],
-            "answer_id": storage["answer_id"],
-            "storage": "supabase",
+            "paper_id": storage["paper_id"] if storage else paper_id,
+            "question_id": storage["question_id"] if storage else None,
+            "answer_id": storage["answer_id"] if storage else None,
         }
 
     except HTTPException:

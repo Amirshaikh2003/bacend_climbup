@@ -1847,11 +1847,8 @@ def sanitize_mermaid_blocks(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]
             
             if not is_valid:
                 logger.warning(f"Mermaid validation failed for block '{title}'. Content: {content}")
-                sanitized.append({
-                    "type": "markdown",
-                    "title": f"⚠️ {title} (Unavailable)",
-                    "content": "*(The AI generated a visual diagram for this section, but it contained a formatting error and could not be rendered. Please refer to the textual explanation provided.)*"
-                })
+                # User requested NOT to show 'Diagram Unavailable' blocks, just silently remove it.
+                pass
             else:
                 sanitized.append(block)
         else:
@@ -2051,16 +2048,9 @@ def generate_answer_via_gemini_strict(
 
     except Exception as exc:
         logger.error("Gemini strict answer generation failed: %s", exc, exc_info=True)
-        error_msg = str(exc)
-        if "429" in error_msg or "Quota" in error_msg or "ResourceExhausted" in error_msg:
-            title = "⚠️ AI Rate Limit Reached"
-            content = "Our AI service has reached its token or usage limit. Please wait a minute before trying again."
-        elif "JSON" in error_msg or "Expecting" in error_msg or "delimiter" in error_msg:
-            title = "⚠️ AI Formatting Error"
-            content = f"The AI generated an improperly formatted response (likely a JSON error). Please try again. Detail: {error_msg}"
-        else:
-            title = "⚠️ Generation Error"
-            content = f"An unexpected error occurred: {error_msg}"
+        # User requested to show this specific error for ANY problem.
+        title = "⚠️ AI Rate Limit Reached"
+        content = "Our AI service has reached its strict 1 question per minute limit on Groq. Please wait for exactly 60 seconds before generating the next question."
             
         return {
             "question": question,
