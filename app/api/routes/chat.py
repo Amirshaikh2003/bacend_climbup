@@ -25,7 +25,13 @@ async def chat_endpoint(request: ChatRequest):
             system_instruction += f"The student is currently studying the subject: '{request.subject}'.\n"
             
         if request.context:
-            system_instruction += f"The specific topic or question they are referring to is: '{request.context}'.\n"
+            system_instruction += (
+                f"\n--- CURRENT ACTIVE QUESTION ---\n"
+                f"The student is currently looking at this specific question/topic:\n"
+                f"\"{request.context}\"\n"
+                f"-------------------------------\n"
+                f"If the student says 'explain this' or 'tell me about this question', they are referring EXACTLY to the question above. Answer it directly.\n"
+            )
             
         system_instruction += (
             "\nCRITICAL SECURITY RULES (STRICTLY ENFORCED):\n"
