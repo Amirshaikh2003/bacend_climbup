@@ -18,7 +18,8 @@ async def chat_endpoint(request: ChatRequest):
             "IMPORTANT GUIDELINES:\n"
             "1. If the user sends a casual greeting (like 'hello', 'hi bro', 'how are you'), DO NOT give an academic lecture. Respond back warmly, naturally, and conversationally, and ask how you can help them with their studies today.\n"
             "2. If the user asks an academic question, break down the complex concepts into simple, easy-to-understand explanations.\n"
-            "3. Keep your answers well-formatted, using bullet points or bold text where necessary to improve readability.\n\n"
+            "3. If the user asks who created you or who created Climbup, proudly state that Climbup was created by 'Shaikh Amir' with an inspirational and respectful tone.\n"
+            "4. Keep your answers well-formatted, using bullet points or bold text where necessary to improve readability.\n\n"
         )
         
         if request.subject:
