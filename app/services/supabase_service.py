@@ -183,7 +183,8 @@ def get_subjects(branch_id: str, semester: int) -> list[dict[str, Any]]:
 
 def get_all_question_papers() -> list[dict[str, Any]]:
     # Select question papers along with their subjects for display
-    return _select("question_papers", "select=*,subjects(subject_name)&order=created_at.desc")
+    # Ordering by year descending since created_at doesn't exist
+    return _select("question_papers", "select=*,subjects(subject_name)&order=year.desc")
 
 
 def create_question_paper(
