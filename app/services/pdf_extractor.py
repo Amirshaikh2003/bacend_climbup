@@ -9,6 +9,8 @@ import cloudinary.uploader
 from io import BytesIO
 from dotenv import load_dotenv
 
+from app.services.ai.gemini_client import fix_pdf_math_with_vision
+
 load_dotenv()
 
 # =========================
@@ -539,6 +541,45 @@ def process_pdf_file(pdf_bytes: bytes, filename: str) -> dict:
         all_lines.extend(page_lines)
 
     all_questions = extract_questions_from_lines(all_lines, page_width)
+    
+    # ── FIX BROKEN MATH SYMBOLS USING GEMINI VISION ──
+    page_to_questions = {}
+    for q in all_questions:
+        page_to_questions.setdefault(q["page"], []).append(q)
+        
+    for page_num, page_qs in page_to_questions.items():
+        try:
+            page = doc.load_page(page_num - 1)
+            # High res for math OCR
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+            img_bytes = pix.tobytes("png")
+            
+            prompt = (
+                "Here is an image of a question paper page. "
+                "The text below was extracted previously but the mathematical symbols, plus signs (+), minus signs, prime marks ('), "
+                "and logic expressions are corrupted (often showing as weird boxes like ⭘ or missing completely).\n\n"
+                "Please fix the 'question' text for EACH of these items by looking at the image. "
+                "Preserve all mathematical formulas perfectly using standard text or LaTeX. "
+                "Return the result strictly as a JSON array of objects, with keys 'question_key' and 'fixed_question'.\n\n"
+                "Broken questions:\n"
+            )
+            for q in page_qs:
+                prompt += f"- [Key: {q['question_key']}] {q['question']}\n"
+                
+            response_text = fix_pdf_math_with_vision(img_bytes, prompt)
+            clean_json = response_text.replace('```json', '').replace('```', '').strip()
+            fixed_data = json.loads(clean_json)
+            
+            fixed_map = {str(item.get('question_key', '')): str(item.get('fixed_question', '')) for item in fixed_data}
+            for q in page_qs:
+                qk = str(q['question_key'])
+                if qk in fixed_map and fixed_map[qk]:
+                    q['question'] = fixed_map[qk]
+                    
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Failed to fix math on page {page_num}: {e}")
+
     attach_diagrams_to_questions(all_questions, all_diagrams)
 
     final_questions = clean_final_questions(all_questions)

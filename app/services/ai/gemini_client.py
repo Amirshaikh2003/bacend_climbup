@@ -53,7 +53,7 @@ def _get_api_key() -> str:
 
 
 def _get_model() -> str:
-    return getattr(settings, "GEMINI_MODEL", "gemini-2.0-flash")
+    return getattr(settings, "GEMINI_MODEL", "gemini-3.1-flash-lite")
 
 
 def _download_image_b64(url: str) -> Optional[tuple[str, str]]:
@@ -245,3 +245,35 @@ def chat_completion_with_images(
     """
     contents, system_instruction = _build_contents(messages, image_urls=image_urls)
     return _gemini_request(contents, system_instruction, max_tokens, temperature)
+
+
+def fix_pdf_math_with_vision(
+    image_bytes: bytes,
+    prompt_text: str,
+    max_tokens: int = 8192,
+    temperature: float = 0.1,
+) -> str:
+    """
+    Sends a raw image of a PDF page to Gemini to perfectly extract/fix math and text.
+    """
+    b64_img = base64.b64encode(image_bytes).decode("utf-8")
+    
+    contents = [{
+        "role": "user",
+        "parts": [
+            {"text": prompt_text},
+            {
+                "inlineData": {
+                    "mimeType": "image/png",
+                    "data": b64_img
+                }
+            }
+        ]
+    }]
+    
+    system_instruction = {
+        "parts": [{"text": "You are an expert at perfectly reading question papers and converting math to LaTeX."}]
+    }
+    
+    return _gemini_request(contents, system_instruction, max_tokens, temperature, response_mime_type="application/json")
+
