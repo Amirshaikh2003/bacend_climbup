@@ -560,6 +560,7 @@ def process_pdf_file(pdf_bytes: bytes, filename: str) -> dict:
                 "and logic expressions are corrupted (often showing as weird boxes like ⭘ or missing completely).\n\n"
                 "Please fix the 'question' text for EACH of these items by looking at the image. "
                 "Preserve all mathematical formulas perfectly using standard text or LaTeX. "
+                "CRITICAL: If a question contains a table or tabular data, you MUST format it as a proper Markdown table. DO NOT summarize or compress tables into single lines.\n"
                 "Return the result strictly as a JSON array of objects, with keys 'question_key' and 'fixed_question'.\n\n"
                 "Broken questions:\n"
             )
