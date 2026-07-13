@@ -8,6 +8,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     subject: Optional[str] = Field(None, description="The subject context (e.g. Operating Systems)")
     context: Optional[str] = Field(None, description="The specific topic or question context")
+    image_url: Optional[str] = Field(None, description="Optional image URL or base64 data URI to send to Gemini")
     messages: List[ChatMessage] = Field(..., description="Conversation history including the latest user message")
 
 class ChatResponse(BaseModel):

@@ -1,8 +1,7 @@
 import logging
 from fastapi import APIRouter, HTTPException
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.ai.groq_client import chat_completion as groq_chat_completion
-from app.services.ai.openrouter_client import chat_completion as openrouter_chat_completion
+from app.services.ai.gemini_client import chat_completion_with_images
 
 logger = logging.getLogger(__name__)
 
@@ -42,34 +41,27 @@ async def chat_endpoint(request: ChatRequest):
             "4. Be helpful, but maintain a strict boundary as an educational AI assistant."
         )
 
-        # Prepare messages array for Groq
-        groq_messages = [{"role": "system", "content": system_instruction}]
+        # Prepare messages array for Gemini
+        gemini_messages = [{"role": "system", "content": system_instruction}]
         
         # Add user's conversation history
         for msg in request.messages:
             role = msg.role if msg.role in ["user", "assistant"] else "user"
-            groq_messages.append({"role": role, "content": msg.content})
+            gemini_messages.append({"role": role, "content": msg.content})
 
-        # 1. Try Groq API first
+        image_urls = [request.image_url] if request.image_url else None
+
+        # Call Gemini API
         try:
-            reply = groq_chat_completion(
-                messages=groq_messages,
+            reply = chat_completion_with_images(
+                messages=gemini_messages,
+                image_urls=image_urls,
                 max_tokens=2048,
                 temperature=0.4
             )
-        except Exception as groq_err:
-            logger.warning(f"Groq API failed in Chatbot, falling back to OpenRouter: {groq_err}")
-            # 2. Try OpenRouter as Fallback
-            try:
-                reply = openrouter_chat_completion(
-                    messages=groq_messages,
-                    max_tokens=2048,
-                    temperature=0.4
-                )
-            except Exception as or_err:
-                logger.error(f"Both Groq and OpenRouter failed in Chatbot: {or_err}")
-                # 3. Return Friendly Message if both fail
-                reply = "Our servers are currently experiencing high load. Please try again after some time. Thank you for your patience!"
+        except Exception as api_err:
+            logger.error(f"Gemini API failed in Chatbot: {api_err}")
+            reply = "Our servers are currently experiencing high load. Please try again after some time. Thank you for your patience!"
 
         return ChatResponse(success=True, reply=reply)
 
