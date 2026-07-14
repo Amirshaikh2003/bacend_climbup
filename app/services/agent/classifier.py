@@ -22,15 +22,21 @@ You MUST respond ONLY with a valid JSON object in the exact format below, with N
     "intent": "ONE_OF_THE_INTENTS",
     "topic": "extracted_topic_or_entity_name_if_applicable_else_null"
 }
+If a context is provided below, assume the user's query refers to that context if they use words like "this", "it", or ask a question without specifying the topic.
+
 """
 
-def classify_intent(messages: List[Dict[str, str]]) -> Dict[str, Any]:
+def classify_intent(messages: List[Dict[str, str]], context: str = None) -> Dict[str, Any]:
     """
     Classifies the user's intent using Gemini.
     """
     try:
+        prompt = INTENT_PROMPT
+        if context:
+            prompt += f"\n\nCURRENT ACTIVE CONTEXT/QUESTION:\n\"{context}\"\n"
+            
         # Prepare messages just for classification
-        classifier_messages = [{"role": "system", "content": INTENT_PROMPT}]
+        classifier_messages = [{"role": "system", "content": prompt}]
         
         # We only need the last few messages for context to keep it fast
         recent_messages = messages[-3:]

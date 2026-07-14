@@ -21,7 +21,7 @@ def process_chat_request(request: ChatRequest, base_system_prompt: str) -> str:
     messages_dict = [{"role": m.role, "content": m.content} for m in request.messages]
     
     # 1. Intent Detection
-    intent_data = classify_intent(messages_dict)
+    intent_data = classify_intent(messages_dict, request.context)
     intent = intent_data.get("intent", "GENERAL_CHAT")
     topic = intent_data.get("topic")
     
