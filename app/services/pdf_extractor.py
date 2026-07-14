@@ -528,6 +528,21 @@ def process_pdf_file(pdf_bytes: bytes, filename: str) -> dict:
     all_diagrams = []
     page_width = doc.load_page(0).rect.width if len(doc) > 0 else 600
 
+    extracted_year = None
+    extracted_exam_type = None
+
+    if len(doc) > 0:
+        first_page_text = doc.load_page(0).get_text("text")
+        
+        # Match pattern like GUG/S/24 or GUG/W/23
+        # S = Summer, W = Winter
+        match = re.search(r"GUG/([SW])/(\d{2})", first_page_text, re.IGNORECASE)
+        if match:
+            season = match.group(1).upper()
+            year_suffix = match.group(2)
+            extracted_exam_type = "Summer" if season == "S" else "Winter"
+            extracted_year = 2000 + int(year_suffix)
+
     for page_index in range(len(doc)):
         page_number = page_index + 1
         page = doc.load_page(page_index)
@@ -592,6 +607,8 @@ def process_pdf_file(pdf_bytes: bytes, filename: str) -> dict:
             "total_pages": len(doc),
             "total_questions": len(final_questions),
             "total_diagrams": len(all_diagrams),
+            "year": extracted_year,
+            "exam_type": extracted_exam_type
         },
         "questions": final_questions,
     }
