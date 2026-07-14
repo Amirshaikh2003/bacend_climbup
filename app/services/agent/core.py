@@ -2,7 +2,7 @@ import logging
 from typing import List, Dict, Optional
 from app.schemas.chat import ChatRequest
 from app.services.agent.classifier import classify_intent
-from app.services.agent.tools import search_topic_in_db, get_important_topics
+from app.services.agent.tools import search_topic_in_db, get_important_topics, get_top_student_answers
 from app.services.agent.context_builder import build_context_prompt
 from app.services.ai.gemini_client import chat_completion_with_images
 # If you want to use groq or openrouter, you can import them here and conditionally route
@@ -29,13 +29,17 @@ def process_chat_request(request: ChatRequest, base_system_prompt: str) -> str:
     
     # 2 & 3. Tool Selection & Context Building
     db_context_str = ""
-    if intent in ["QUESTION_FREQUENCY", "QUESTION_SEARCH", "MARKS_PATTERN", "QUESTION_EXPLANATION", "EXAM_HISTORY"]:
+    if intent in ["QUESTION_FREQUENCY", "QUESTION_SEARCH", "MARKS_PATTERN", "EXAM_HISTORY"]:
         if topic:
             db_data = search_topic_in_db(topic)
             db_context_str = build_context_prompt(db_data, intent)
     elif intent == "IMPORTANT_TOPICS":
         db_data = get_important_topics()
         db_context_str = build_context_prompt(db_data, intent)
+    elif intent == "QUESTION_EXPLANATION":
+        if topic:
+            db_data = get_top_student_answers(topic)
+            db_context_str = build_context_prompt(db_data, "TOP_STUDENT_ANSWERS")
         
     # 4. Final Prompt Assembly
     final_system_prompt = base_system_prompt

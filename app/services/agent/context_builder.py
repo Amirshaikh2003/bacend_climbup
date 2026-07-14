@@ -25,7 +25,8 @@ def build_context_prompt(db_data: Dict[str, Any], intent: str) -> str:
         if samples:
             context_str += "**Sample Previous Questions:**\n"
             for idx, sq in enumerate(samples, 1):
-                context_str += f"{idx}. \"{sq['question']}\" ({sq['marks']} Marks, Year: {sq['year']})\n"
+                exam_info = sq.get('exam_info', sq.get('year', 'Unknown'))
+                context_str += f"{idx}. \"{sq['question']}\" ({sq['marks']} Marks, Exam: {exam_info})\n"
         else:
             context_str += "No previous questions found for this topic.\n"
             
@@ -38,5 +39,22 @@ def build_context_prompt(db_data: Dict[str, Any], intent: str) -> str:
         else:
             context_str += "No important topics data available.\n"
             
+    elif intent == "TOP_STUDENT_ANSWERS":
+        topic = db_data.get("topic", "Unknown")
+        answers = db_data.get("top_student_answers", [])
+        msg = db_data.get("message")
+        
+        context_str += f"**Topic/Keyword:** {topic}\n\n"
+        if msg:
+            context_str += f"{msg}\n"
+        elif answers:
+            context_str += "**Top Student Answers (Present these to the user!):**\n"
+            for idx, ans in enumerate(answers, 1):
+                context_str += f"--- Answer {idx} ---\n"
+                context_str += f"Question context: {ans.get('question', 'Unknown')}\n"
+                context_str += f"Author: {ans.get('author_name', 'Anonymous')} (Reputation: {ans.get('author_reputation', 0)})\n"
+                context_str += f"Score: {ans.get('verification_score', 0)}/100, Likes: {ans.get('likes_count', 0)}\n"
+                context_str += f"Answer: {ans.get('answer_content', '')}\n\n"
+
     context_str += "========================================================\n\n"
     return context_str

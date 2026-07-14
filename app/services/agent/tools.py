@@ -73,11 +73,15 @@ def search_topic_in_db(topic: str) -> Dict[str, Any]:
         paper = r.get("question_papers") or {}
         year = paper.get("year", "Unknown")
         exam = paper.get("exam_type", "Unknown")
+        title = paper.get("paper_title", "")
+        
+        display_exam = title if title else f"{exam} {year}"
+        
         formatted_questions.append({
             "question": r.get("question_text"),
             "marks": r.get("marks"),
             "year": year,
-            "exam": exam
+            "exam_info": display_exam
         })
         
     return {
@@ -121,4 +125,74 @@ def get_important_topics() -> Dict[str, Any]:
     
     return {
         "important_topics": important[:5]
+    }
+
+def get_top_student_answers(topic: str) -> Dict[str, Any]:
+    """
+    Fetches the highest-rated student answers for questions related to the topic.
+    """
+    if not topic:
+        return {"error": "No topic provided"}
+        
+    logger.info(f"Agent Tool: Searching for top student answers for topic: {topic}")
+    
+    # 1. First, find questions matching the topic
+    params = {
+        "select": "question_id,question_text,marks",
+        "question_text": f"ilike.*{topic}*",
+        "limit": "5"
+    }
+    
+    questions = _db_get("questions", params)
+    if not questions:
+        # Try searching by module
+        params = {
+            "select": "question_id,question_text,marks",
+            "module": f"ilike.*{topic}*",
+            "limit": "5"
+        }
+        questions = _db_get("questions", params)
+        
+    if not questions:
+        return {"message": f"No questions found for topic: {topic}"}
+        
+    # 2. For the found questions, fetch top student answers
+    question_ids = [str(q.get("question_id")) for q in questions if q.get("question_id")]
+    if not question_ids:
+        return {"message": "Could not extract question IDs."}
+        
+    id_list_str = ",".join(question_ids)
+    
+    ans_params = {
+        "select": "answer_content,verification_score,likes_count,status,question_id,users(full_name,reputation)",
+        "question_id": f"in.({id_list_str})",
+        "status": "eq.published",
+        "order": "verification_score.desc,likes_count.desc",
+        "limit": "5"
+    }
+    
+    answers = _db_get("student_answers", ans_params)
+    
+    if not answers:
+        return {"message": "No published student answers found for this topic yet. Be the first to answer!"}
+        
+    # Match answers back to their questions for better context
+    formatted_results = []
+    for ans in answers:
+        q_id = ans.get("question_id")
+        q_text = next((q["question_text"] for q in questions if q.get("question_id") == q_id), "Unknown Question")
+        user_info = ans.get("users", {}) or {}
+        
+        formatted_results.append({
+            "question": q_text,
+            "answer_content": ans.get("answer_content", ""),
+            "verification_score": ans.get("verification_score", 0),
+            "likes_count": ans.get("likes_count", 0),
+            "author_name": user_info.get("full_name", "Anonymous"),
+            "author_reputation": user_info.get("reputation", 0)
+        })
+        
+    return {
+        "topic": topic,
+        "top_student_answers": formatted_results
     }
