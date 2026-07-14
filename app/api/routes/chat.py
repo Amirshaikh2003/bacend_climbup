@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, HTTPException
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.ai.gemini_client import chat_completion_with_images
+from app.services.agent.core import process_chat_request
 
 logger = logging.getLogger(__name__)
 
@@ -41,27 +41,7 @@ async def chat_endpoint(request: ChatRequest):
             "4. Be helpful, but maintain a strict boundary as an educational AI assistant."
         )
 
-        # Prepare messages array for Gemini
-        gemini_messages = [{"role": "system", "content": system_instruction}]
-        
-        # Add user's conversation history
-        for msg in request.messages:
-            role = msg.role if msg.role in ["user", "assistant"] else "user"
-            gemini_messages.append({"role": role, "content": msg.content})
-
-        image_urls = [request.image_url] if request.image_url else None
-
-        # Call Gemini API
-        try:
-            reply = chat_completion_with_images(
-                messages=gemini_messages,
-                image_urls=image_urls,
-                max_tokens=2048,
-                temperature=0.4
-            )
-        except Exception as api_err:
-            logger.error(f"Gemini API failed in Chatbot: {api_err}")
-            reply = "Our servers are currently experiencing high load. Please try again after some time. Thank you for your patience!"
+        reply = process_chat_request(request, system_instruction)
 
         return ChatResponse(success=True, reply=reply)
 
