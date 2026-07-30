@@ -10,7 +10,7 @@ import cloudinary.uploader
 from io import BytesIO
 from dotenv import load_dotenv
 
-from app.services.ai.gemini_client import fix_pdf_math_with_vision
+from app.services.ai.gemini_client import fix_pdf_math_with_vision, extract_page_questions_agentic
 
 load_dotenv()
 
