@@ -661,13 +661,12 @@ def process_pdf_file(pdf_bytes: bytes, filename: str) -> dict:
                 
         except Exception as e:
             import traceback
-            print(f"Error during agentic extraction on page {page_number}: {e}")
             traceback.print_exc()
             try:
                 print(f"Raw response was: {agent_response_json}")
             except:
                 pass
-            page_questions = []
+            raise RuntimeError(f"Gemini AI Extraction Failed on page {page_number}: {str(e)}")
             
         # 3. Map diagrams to questions based on Y-coordinates
         # We find the question whose ymin is just above the diagram's top edge
