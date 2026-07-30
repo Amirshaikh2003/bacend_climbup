@@ -608,13 +608,10 @@ def clean_final_questions(questions):
 
 def process_pdf_file(pdf_bytes: bytes, filename: str) -> dict:
     os.makedirs(TEMP_DIR, exist_ok=True)
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
 
-    # Open PDF from bytes
-    doc = fitz.open("pdf", pdf_bytes)
-
-    all_lines = []
     all_diagrams = []
-    page_width = doc.load_page(0).rect.width if len(doc) > 0 else 600
+    final_questions = []
 
     extracted_year = None
     extracted_exam_type = None
@@ -623,7 +620,6 @@ def process_pdf_file(pdf_bytes: bytes, filename: str) -> dict:
         first_page_text = doc.load_page(0).get_text("text")
         
         # Match pattern like GUG/S/24 or GUG/W/23
-        # S = Summer, W = Winter
         match = re.search(r"GUG/([SW])/(\d{2})", first_page_text, re.IGNORECASE)
         if match:
             season = match.group(1).upper()
@@ -634,71 +630,72 @@ def process_pdf_file(pdf_bytes: bytes, filename: str) -> dict:
     for page_index in range(len(doc)):
         page_number = page_index + 1
         page = doc.load_page(page_index)
-
+        
+        # 1. Extract diagrams using OpenCV
         page_diagrams = extract_diagrams_from_page(page, page_number, TEMP_DIR)
         all_diagrams.extend(page_diagrams)
-
-        page_lines = get_page_lines(page, page_diagrams)
-        for line in page_lines:
-            line["page"] = page_number
-        all_lines.extend(page_lines)
-
-    all_questions = extract_questions_from_lines(all_lines, page_width)
-    
-    # ── FIX BROKEN MATH SYMBOLS USING GEMINI VISION ──
-    page_to_questions = {}
-    for q in all_questions:
-        page_to_questions.setdefault(q["page"], []).append(q)
         
-    for page_num, page_qs in page_to_questions.items():
+        # High res image for the Agent
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+        img_bytes = pix.tobytes("png")
+        
+        # 2. Ask Gemini 1.5 Flash to perfectly extract all questions
         try:
-            page = doc.load_page(page_num - 1)
-            # High res for math OCR
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-            img_bytes = pix.tobytes("png")
-            
-            prompt = (
-                "Here is an image of a question paper page. "
-                "The text below was extracted previously but the mathematical symbols, plus signs (+), minus signs, prime marks ('), "
-                "and logic expressions are corrupted (often showing as weird boxes like ⭘ or missing completely).\n\n"
-                "Please fix the 'question' text for EACH of these items by looking at the image. "
-                "Preserve all mathematical formulas perfectly using standard text or LaTeX. "
-                "CRITICAL: If a question contains a table or tabular data, you MUST format it as a proper Markdown table. DO NOT summarize or compress tables into single lines.\n"
-                "CRITICAL: DO NOT generate any markdown image tags (![image](...)), <img> tags, or placeholder URLs (like imgur.com) for diagrams. We handle diagrams separately, so ONLY extract the text and tables.\n"
-                "Return the result strictly as a JSON array of objects, with keys 'question_key' and 'fixed_question'.\n\n"
-                "Broken questions:\n"
-            )
-            for q in page_qs:
-                prompt += f"- [Key: {q['question_key']}] {q['question']}\n"
-                
-            response_text = fix_pdf_math_with_vision(img_bytes, prompt)
-            clean_json = response_text.replace('```json', '').replace('```', '').strip()
-            fixed_data = json.loads(clean_json)
-            
-            fixed_map = {str(item.get('question_key', '')): str(item.get('fixed_question', '')) for item in fixed_data}
-            for q in page_qs:
-                qk = str(q['question_key'])
-                if qk in fixed_map and fixed_map[qk]:
-                    q['question'] = fixed_map[qk]
-                    
+            agent_response_json = extract_page_questions_agentic(img_bytes)
+            clean_json = agent_response_json.replace('```json', '').replace('```', '').strip()
+            page_questions = json.loads(clean_json)
         except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"Failed to fix math on page {page_num}: {e}")
+            print(f"Error during agentic extraction on page {page_number}: {e}")
+            page_questions = []
+            
+        # 3. Map diagrams to questions based on Y-coordinates
+        # We find the question whose ymin is just above the diagram's top edge
+        for q in page_questions:
+            q["page"] = page_number
+            q["image_urls"] = []
+            # Generate UUID key
+            q["question_key"] = f"{q.get('question_no', '')}{q.get('sub_question', '')}_{uuid.uuid4().hex[:6]}"
+            
+        for diagram in page_diagrams:
+            # OpenCV diagram bbox is [x0, y0, x1, y1] in raw page coordinates
+            # Normalize y0 to 0-1000 scale
+            page_h = page.rect.height
+            normalized_diagram_top = (diagram["bbox"][1] / page_h) * 1000
+            
+            # Find questions that appear before this diagram (ymin < diagram_top)
+            # Add a small buffer (e.g., 50 units) to allow for minor LLM misalignment
+            previous_questions = [q for q in page_questions if q.get("ymin", 0) <= normalized_diagram_top + 50]
+            
+            if previous_questions:
+                # Assign to the question closest to the diagram from above
+                matched_question = max(
+                    previous_questions,
+                    key=lambda q: q.get("ymin", 0),
+                )
+                matched_question["image_urls"].append(diagram["url"])
+                
+        final_questions.extend(page_questions)
 
-    attach_diagrams_to_questions(all_questions, all_diagrams)
+    # Calculate total marks
+    total_marks = sum(int(q.get("marks", 0)) for q in final_questions if str(q.get("marks", "")).isdigit())
 
-    final_questions = clean_final_questions(all_questions)
+    # Final cleanup of TEMP_DIR
+    for f in os.listdir(TEMP_DIR):
+        try:
+            os.remove(os.path.join(TEMP_DIR, f))
+        except:
+            pass
 
-    final_output = {
+    return {
         "paper": {
             "source_pdf": filename,
             "total_pages": len(doc),
             "total_questions": len(final_questions),
             "total_diagrams": len(all_diagrams),
             "year": extracted_year,
-            "exam_type": extracted_exam_type
+            "exam_type": extracted_exam_type,
+            "total_marks": total_marks
         },
         "questions": final_questions,
+        "diagrams": all_diagrams
     }
-    
-    return final_output

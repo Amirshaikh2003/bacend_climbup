@@ -277,3 +277,50 @@ def fix_pdf_math_with_vision(
     
     return _gemini_request(contents, system_instruction, max_tokens, temperature, response_mime_type="application/json")
 
+
+def extract_page_questions_agentic(
+    image_bytes: bytes,
+    max_tokens: int = 8192,
+    temperature: float = 0.1,
+) -> str:
+    """
+    Agentic Extraction: Takes a raw page image and perfectly extracts all questions into a structured JSON array.
+    """
+    b64_img = base64.b64encode(image_bytes).decode("utf-8")
+    
+    prompt_text = (
+        "You are an expert Question Paper Extractor Agent. I am providing a high-resolution image of a page from a university question paper.\n"
+        "Your task is to perfectly extract all questions into a structured JSON array.\n\n"
+        "Schema for each question object in the JSON array:\n"
+        "- `question_no` (string): The main question number (e.g. '1', '2', 'Q3').\n"
+        "- `sub_question` (string): The sub-question letter/number (e.g. 'a', 'b', 'i', 'ii'). Leave empty string if none.\n"
+        "- `question` (string): The EXACT text of the question. CRITICAL: Use LaTeX for all math equations, symbols, and formulas. Format tables as strict Markdown tables. Preserve the exact meaning.\n"
+        "- `marks` (integer): The marks assigned to the question. If not found, use 5.\n"
+        "- `has_or_before` (boolean): True ONLY if the word 'OR' (standing alone as a separator) is printed directly ABOVE this question.\n"
+        "- `ymin` (integer): The approximate normalized Y-coordinate (0 to 1000) of the top edge of this question's text on the page. (0=top of page, 1000=bottom). This is CRITICAL for mapping diagrams.\n\n"
+        "RULES:\n"
+        "1. DO NOT include header/footer text (e.g., 'Time: 3 Hours', 'Max Marks', Page numbers).\n"
+        "2. If there is a general instruction note (e.g., 'Assume suitable data', 'Attempt any five'), DO NOT extract it as a question unless it is specifically part of a numbered question.\n"
+        "3. DO NOT hallucinate image tags for diagrams. Only extract the text and tables.\n"
+        "4. Be 100% accurate. Do not drop ANY sub-questions.\n"
+        "5. MUST return a valid JSON array.\n"
+    )
+
+    contents = [{
+        "role": "user",
+        "parts": [
+            {"text": prompt_text},
+            {
+                "inlineData": {
+                    "mimeType": "image/png",
+                    "data": b64_img
+                }
+            }
+        ]
+    }]
+    
+    system_instruction = {
+        "parts": [{"text": "You are a flawless OCR and Data Extraction AI. You strictly follow JSON schemas and preserve math and tables perfectly."}]
+    }
+    
+    return _gemini_request(contents, system_instruction, max_tokens, temperature, response_mime_type="application/json")
