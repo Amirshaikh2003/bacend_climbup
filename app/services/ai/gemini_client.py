@@ -183,10 +183,10 @@ def _gemini_request(
                 data = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
-            if exc.code == 429:
-                # Rate limited — wait and retry
-                wait = 20 * (attempt + 1)
-                logger.warning("Gemini rate limited (429). Waiting %ds before retry %d/%d…", wait, attempt + 1, retries)
+            if exc.code in (429, 500, 502, 503, 504):
+                # Rate limited or server error — wait and retry
+                wait = 15 * (attempt + 1)
+                logger.warning("Gemini API error (%d). Waiting %ds before retry %d/%d…", exc.code, wait, attempt + 1, retries)
                 if attempt < retries:
                     time.sleep(wait)
                     continue
