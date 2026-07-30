@@ -298,9 +298,28 @@ def extract_questions_from_lines(lines, page_width):
         sub_match = SUB_RE.match(text)
 
         if main_match:
+            new_main = main_match.group(1)
+            
+            # Check if this is a sub-sub-question (like '1)', '2)') disguised as a main question
+            is_sub_sub = False
+            if current_main and new_main.isdigit() and current_main.isdigit():
+                if int(new_main) <= int(current_main):
+                    # Sub-sub questions typically use parentheses
+                    after_num = text.split(new_main, 1)[-1]
+                    if ")" in after_num[:3]:
+                        # Check indentation relative to the current question
+                        if current and bbox[0] > current["_bbox"][0] + 10:
+                            is_sub_sub = True
+                            
+            if is_sub_sub and current:
+                current["question"] += "\n" + text
+                current["_bbox"][2] = max(current["_bbox"][2], bbox[2])
+                current["_bbox"][3] = bbox[3]
+                continue
+
             save_current()
 
-            current_main = main_match.group(1)
+            current_main = new_main
             sub = (main_match.group(2) or "").lower()
             q_text = clean_text(main_match.group(3))
 
