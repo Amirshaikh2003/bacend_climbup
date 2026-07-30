@@ -643,9 +643,30 @@ def process_pdf_file(pdf_bytes: bytes, filename: str) -> dict:
         try:
             agent_response_json = extract_page_questions_agentic(img_bytes)
             clean_json = agent_response_json.replace('```json', '').replace('```', '').strip()
-            page_questions = json.loads(clean_json)
+            parsed_data = json.loads(clean_json)
+            
+            # Gemini might return an object like {"questions": [...]} or a direct array [...]
+            if isinstance(parsed_data, dict):
+                # Try to find the list inside the dict
+                for val in parsed_data.values():
+                    if isinstance(val, list):
+                        page_questions = val
+                        break
+                else:
+                    page_questions = [parsed_data] # Fallback if it's a single object
+            elif isinstance(parsed_data, list):
+                page_questions = parsed_data
+            else:
+                page_questions = []
+                
         except Exception as e:
+            import traceback
             print(f"Error during agentic extraction on page {page_number}: {e}")
+            traceback.print_exc()
+            try:
+                print(f"Raw response was: {agent_response_json}")
+            except:
+                pass
             page_questions = []
             
         # 3. Map diagrams to questions based on Y-coordinates
