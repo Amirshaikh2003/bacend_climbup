@@ -406,34 +406,17 @@ def extract_diagrams_from_page(page, page_number: int, temp_dir: str):
     page_area = image.shape[0] * image.shape[1]
     diagrams = []
 
-    for idx, contour in enumerate(contours):
+    text_blocks = [b for b in page.get_text("blocks") if b[6] == 0]
+    valid_bboxes = []
+
+    # Pass 1: Filter out text blocks and tiny noise
+    for contour in contours:
         x, y, w, h = cv2.boundingRect(contour)
 
-        area = w * h
-        aspect = w / float(h)
-        density = cv2.countNonZero(binary[y:y + h, x:x + w]) / area
-
-        if area < 20000:
-            continue
-
-        if area > page_area * 0.65:
-            continue
-
-        if aspect > 7.0:
-            continue
-
-        if h < 60:
-            continue
-
-        if density > 0.70:
-            continue
-
-        # Filter out blocks that are primarily text
         orig_x0, orig_y0 = x / zoom, y / zoom
         orig_x1, orig_y1 = (x + w) / zoom, (y + h) / zoom
         orig_area = (orig_x1 - orig_x0) * (orig_y1 - orig_y0)
         
-        text_blocks = [b for b in page.get_text("blocks") if b[6] == 0]
         text_overlap = 0
         for b in text_blocks:
             bx0, by0, bx1, by1 = b[:4]
@@ -446,6 +429,65 @@ def extract_diagrams_from_page(page, page_number: int, temp_dir: str):
                 
         if orig_area > 0 and (text_overlap / orig_area) > 0.45:
             continue
+            
+        if w * h < 500:
+            continue
+            
+        valid_bboxes.append([x, y, x + w, y + h])
+
+    # Pass 2: Merge bounding boxes that are close to each other
+    merge_thresh = 40  # pixels
+    merged_bboxes = []
+    while valid_bboxes:
+        box = valid_bboxes.pop(0)
+        x0, y0, x1, y1 = box
+        
+        has_merged = True
+        while has_merged:
+            has_merged = False
+            for i in range(len(valid_bboxes) - 1, -1, -1):
+                bx0, by0, bx1, by1 = valid_bboxes[i]
+                
+                dx = max(0, max(x0, bx0) - min(x1, bx1))
+                dy = max(0, max(y0, by0) - min(y1, by1))
+                
+                if dx <= merge_thresh and dy <= merge_thresh:
+                    x0 = min(x0, bx0)
+                    y0 = min(y0, by0)
+                    x1 = max(x1, bx1)
+                    y1 = max(y1, by1)
+                    valid_bboxes.pop(i)
+                    has_merged = True
+        
+        merged_bboxes.append([x0, y0, x1, y1])
+
+    diagrams = []
+    for idx, bbox in enumerate(merged_bboxes):
+        x, y, x1, y1 = bbox
+        w = x1 - x
+        h = y1 - y
+
+        area = w * h
+        aspect = w / float(h) if h > 0 else 100
+        density = cv2.countNonZero(binary[y:y + h, x:x + w]) / area if area > 0 else 0
+
+        if area < 10000:
+            continue
+
+        if area > page_area * 0.65:
+            continue
+
+        if aspect > 15.0:
+            continue
+
+        if h < 40:
+            continue
+
+        if density > 0.70:
+            continue
+
+        orig_x0, orig_y0 = x / zoom, y / zoom
+        orig_x1, orig_y1 = (x + w) / zoom, (y + h) / zoom
 
         # Pad the visual crop to ensure we capture detached labels (like 80kN, 1.5m) 
         # without affecting the logical bounding box used for text deletion.
