@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import uuid
 import fitz
 import cv2
 import numpy as np
@@ -341,7 +342,7 @@ def extract_questions_from_lines(lines, page_width):
                 "page": page_number,
                 "question_no": current_main,
                 "sub_question": sub,
-                "question_key": f"{current_main}{sub}",
+                "question_key": f"{current_main}{sub}_{uuid.uuid4().hex[:6]}",
                 "question": q_text,
                 "marks": mark,
                 "has_or_before": or_before,
@@ -362,10 +363,10 @@ def extract_questions_from_lines(lines, page_width):
                 "page": page_number,
                 "question_no": current_main,
                 "sub_question": sub,
-                "question_key": f"{current_main}{sub}",
+                "question_key": f"{current_main}{sub}_{uuid.uuid4().hex[:6]}",
                 "question": q_text,
                 "marks": mark,
-                "has_or_before": or_before,
+                "has_or_before": False, # 'or' before a sub-question isn't usually a thing
                 "image_urls": [],
                 "_bbox": bbox,
             }
