@@ -447,7 +447,17 @@ def extract_diagrams_from_page(page, page_number: int, temp_dir: str):
         if orig_area > 0 and (text_overlap / orig_area) > 0.45:
             continue
 
-        crop = image[y:y + h, x:x + w]
+        # Pad the visual crop to ensure we capture detached labels (like 80kN, 1.5m) 
+        # without affecting the logical bounding box used for text deletion.
+        pad_y = 80  # 20 points
+        pad_x = 40  # 10 points
+        
+        crop_y = max(0, y - pad_y)
+        crop_x = max(0, x - pad_x)
+        crop_h = min(image.shape[0] - crop_y, h + pad_y * 2)
+        crop_w = min(image.shape[1] - crop_x, w + pad_x * 2)
+
+        crop = image[crop_y:crop_y + crop_h, crop_x:crop_x + crop_w]
 
         filename = os.path.join(
             temp_dir,
