@@ -146,6 +146,7 @@ def _gemini_request(
     max_tokens: int,
     temperature: float,
     response_mime_type: Optional[str] = None,
+    response_schema: Optional[dict] = None,
     retries: int = 3,
 ) -> str:
     """Send a generateContent request to Gemini and return the text."""
@@ -158,6 +159,8 @@ def _gemini_request(
     }
     if response_mime_type:
         generation_config["responseMimeType"] = response_mime_type
+    if response_schema:
+        generation_config["responseSchema"] = response_schema
 
     payload: dict = {
         "contents": contents,
@@ -289,21 +292,11 @@ def extract_page_questions_agentic(
     b64_img = base64.b64encode(image_bytes).decode("utf-8")
     
     prompt_text = (
-        "You are an expert Question Paper Extractor Agent. I am providing a high-resolution image of a page from a university question paper.\n"
-        "Your task is to perfectly extract all questions into a structured JSON array.\n\n"
-        "Schema for each question object in the JSON array:\n"
-        "- `question_no` (string): The main question number (e.g. '1', '2', 'Q3').\n"
-        "- `sub_question` (string): The sub-question letter/number (e.g. 'a', 'b', 'i', 'ii'). Leave empty string if none.\n"
-        "- `question` (string): The EXACT text of the question. CRITICAL: Use LaTeX for all math equations, symbols, and formulas. Format tables as strict Markdown tables. Preserve the exact meaning.\n"
-        "- `marks` (integer): The marks assigned to the question. If not found, use 5.\n"
-        "- `has_or_before` (boolean): True ONLY if the word 'OR' (standing alone as a separator) is printed directly ABOVE this question.\n"
-        "- `ymin` (integer): The approximate normalized Y-coordinate (0 to 1000) of the top edge of this question's text on the page. (0=top of page, 1000=bottom). This is CRITICAL for mapping diagrams.\n\n"
-        "RULES:\n"
-        "1. DO NOT include header/footer text (e.g., 'Time: 3 Hours', 'Max Marks', Page numbers).\n"
-        "2. If there is a general instruction note (e.g., 'Assume suitable data', 'Attempt any five'), DO NOT extract it as a question unless it is specifically part of a numbered question.\n"
-        "3. DO NOT hallucinate image tags for diagrams. Only extract the text and tables.\n"
-        "4. Be 100% accurate. Do not drop ANY sub-questions.\n"
-        "5. MUST return a valid JSON array.\n"
+        "Extract all the questions from this exam paper image.\n"
+        "Do not skip any questions. If the text has a question number, it is a question.\n"
+        "The EXACT text of the question must be preserved. CRITICAL: Use LaTeX for all math equations, symbols, and formulas. Format tables as strict Markdown tables.\n"
+        "If a question has sub-questions, extract each sub-question as its own object.\n"
+        "Calculate the approximate Y-coordinate (0 to 1000) for mapping diagrams."
     )
 
     contents = [{
@@ -323,4 +316,20 @@ def extract_page_questions_agentic(
         "parts": [{"text": "You are a flawless OCR and Data Extraction AI. You strictly follow JSON schemas and preserve math and tables perfectly."}]
     }
     
-    return _gemini_request(contents, system_instruction, max_tokens, temperature, response_mime_type="application/json")
+    response_schema = {
+        "type": "ARRAY",
+        "items": {
+            "type": "OBJECT",
+            "properties": {
+                "question_no": {"type": "STRING", "description": "Main question number (e.g. '1', 'Q2')."},
+                "sub_question": {"type": "STRING", "description": "Sub-question (e.g. 'a', 'b'). Leave empty if none."},
+                "question": {"type": "STRING", "description": "The exact text of the question. Use LaTeX for math. Use Markdown for tables."},
+                "marks": {"type": "INTEGER", "description": "The marks. Default to 5."},
+                "has_or_before": {"type": "BOOLEAN", "description": "True if 'OR' is printed directly above this question."},
+                "ymin": {"type": "INTEGER", "description": "The Y-coordinate (0-1000) of the question on the page. (0=top, 1000=bottom)."}
+            },
+            "required": ["question_no", "sub_question", "question", "marks", "has_or_before", "ymin"]
+        }
+    }
+    
+    return _gemini_request(contents, system_instruction, max_tokens, temperature, response_mime_type="application/json", response_schema=response_schema)
