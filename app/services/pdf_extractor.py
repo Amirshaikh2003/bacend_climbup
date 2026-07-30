@@ -214,14 +214,16 @@ def get_page_lines(page, page_diagrams):
         if y0 < 35 or y0 > page_h - 35:
             continue
 
-        # Ignore words that are inside any diagram
+        # Ignore words that are deep inside any diagram
         inside_diagram = False
         for diagram in page_diagrams:
             dx0, dy0, dx1, dy1 = diagram["bbox"]
             # Check if the center of the word falls inside the diagram
+            # We add a 12-point safe margin to top/bottom so we don't accidentally drop 
+            # the question text if the diagram bounding box is slightly too large.
             cx = (x0 + x1) / 2
             cy = (y0 + y1) / 2
-            if dx0 <= cx <= dx1 and dy0 <= cy <= dy1:
+            if dx0 <= cx <= dx1 and (dy0 + 12) <= cy <= (dy1 - 12):
                 inside_diagram = True
                 break
         
@@ -390,7 +392,9 @@ def extract_diagrams_from_page(page, page_number: int, temp_dir: str):
         cv2.THRESH_BINARY_INV,
     )
 
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 15))
+    # Use a wider kernel to merge horizontally but less vertically 
+    # to prevent swallowing the question text paragraphs above diagrams.
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 7))
     binary = cv2.dilate(binary, kernel, iterations=2)
 
     contours, _ = cv2.findContours(
