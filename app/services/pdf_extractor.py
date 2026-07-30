@@ -692,7 +692,11 @@ def process_pdf_file(pdf_bytes: bytes, filename: str) -> dict:
                     previous_questions,
                     key=lambda q: q.get("ymin", 0),
                 )
-                matched_question["image_urls"].append(diagram["url"])
+                try:
+                    image_url = upload_to_cloudinary(diagram["image_path"])
+                    matched_question["image_urls"].append(image_url)
+                except Exception as e:
+                    print(f"Cloudinary upload failed: {diagram['image_path']} -> {e}")
                 
         final_questions.extend(page_questions)
 
