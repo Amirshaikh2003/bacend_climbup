@@ -103,14 +103,18 @@ def clean_text(text: str) -> str:
 
 def is_bad_line(text: str, has_mark: bool = False) -> bool:
     text_lower = text.lower()
-    if "time : " in text_lower or "max. marks" in text_lower:
+    if "time :" in text_lower or "time:" in text_lower or "max. marks" in text_lower or "max marks" in text_lower:
         return True
-    if text_lower.startswith("notes :"):
+    if text_lower.startswith("notes :") or text_lower.startswith("note :") or text_lower.startswith("notes:"):
         return True
+        
+    # If a line has a right-side mark, it is almost certainly a legitimate question (or part of one)
+    if has_mark:
+        return False
     
     note_phrases = [
         "all questions carry",
-        "illustrate your answers wherever necessary",
+        "illustrate your answers",
         "all questions are compulsory",
         "due credit will be given",
         "assume suitable data",
@@ -122,7 +126,10 @@ def is_bad_line(text: str, has_mark: bool = False) -> bool:
     ]
     for phrase in note_phrases:
         if phrase in text_lower:
-            return True
+            # Standalone notes are usually short sentences. 
+            # If the line is long, it is likely a question that just happens to use the phrase.
+            if len(text) < 75:
+                return True
 
     text = clean_text(text)
 
