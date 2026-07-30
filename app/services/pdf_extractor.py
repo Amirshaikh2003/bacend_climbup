@@ -419,7 +419,7 @@ def extract_diagrams_from_page(page, page_number: int, temp_dir: str):
     page_area = image.shape[0] * image.shape[1]
     diagrams = []
 
-    text_blocks = [b for b in page.get_text("blocks") if b[6] == 0]
+    text_words = page.get_text("words")
     valid_bboxes = []
 
     # Pass 1: Filter out text blocks and tiny noise
@@ -431,8 +431,8 @@ def extract_diagrams_from_page(page, page_number: int, temp_dir: str):
         orig_area = (orig_x1 - orig_x0) * (orig_y1 - orig_y0)
         
         text_overlap = 0
-        for b in text_blocks:
-            bx0, by0, bx1, by1 = b[:4]
+        for w_box in text_words:
+            bx0, by0, bx1, by1 = w_box[:4]
             ix0 = max(orig_x0, bx0)
             iy0 = max(orig_y0, by0)
             ix1 = min(orig_x1, bx1)
