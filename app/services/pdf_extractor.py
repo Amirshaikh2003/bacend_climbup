@@ -111,6 +111,10 @@ def is_bad_line(text: str, has_mark: bool = False) -> bool:
     # If a line has a right-side mark, it is almost certainly a legitimate question (or part of one)
     if has_mark:
         return False
+        
+    # Strip leading question number just for bad line check so patterns can match
+    text_no_num = re.sub(r"^(?:Q\s*\.?)?\s*\d{1,2}\s*[\.\)]\s*(?:[a-hj-uw-yz]\s*\))?\s*", "", text, flags=re.I).strip()
+    text_no_num_lower = text_no_num.lower()
     
     note_phrases = [
         "all questions carry",
@@ -121,15 +125,19 @@ def is_bad_line(text: str, has_mark: bool = False) -> bool:
         "use of slide rule",
         "non programmable",
         "thermodynamic tables for moist air",
-        "wherever necessary",
         "diagrams and chemical equation",
     ]
     for phrase in note_phrases:
-        if phrase in text_lower:
+        if text_no_num_lower.startswith(phrase):
+            return True
+        if phrase in text_no_num_lower:
             # Standalone notes are usually short sentences. 
-            # If the line is long, it is likely a question that just happens to use the phrase.
+            # If the line is long and doesn't start with the phrase, it's likely a question.
             if len(text) < 75:
                 return True
+                
+    if "wherever necessary" in text_no_num_lower and len(text) < 75:
+        return True
 
     text = clean_text(text)
 
@@ -138,9 +146,6 @@ def is_bad_line(text: str, has_mark: bool = False) -> bool:
 
     if re.fullmatch(r"\d+", text):
         return True
-
-    # Strip leading question number just for bad line check so patterns can match
-    text_no_num = re.sub(r"^(?:Q\s*\.?)?\s*\d{1,2}\s*[\.\)]\s*(?:[a-hj-uw-yz]\s*\))?\s*", "", text, flags=re.I)
 
     for pattern in BAD_LINE_PATTERNS:
         if re.match(pattern, text_no_num, flags=re.I):
