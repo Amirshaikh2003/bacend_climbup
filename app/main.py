@@ -6,6 +6,7 @@ from app.api.routes.academic import router as academic_router
 from app.api.routes.auth import router as auth_router, verify_token
 from app.api.routes.chat import router as chat_router
 from app.api.routes.verification import router as verification_router
+from app.api.routes.whatsapp import router as whatsapp_router
 from fastapi import Depends
 
 app = FastAPI(
@@ -64,6 +65,14 @@ app.include_router(
     prefix="/api",
     tags=["Verification"],
     dependencies=[Depends(verify_token)],
+)
+
+app.include_router(
+    whatsapp_router,
+    prefix="/api",
+    tags=["WhatsApp Integration"],
+    # No verify_token on the webhook itself because the Node.js bot won't have a user token.
+    # The /generate-link endpoint inside whatsapp.py should have its own verify_token.
 )
 
 
