@@ -9,9 +9,28 @@ const http = require('http'); // Use 'https' if your Render server uses HTTPS
 const BACKEND_URL = process.env.BACKEND_URL || 'https://bacend-climbup.onrender.com/api/whatsapp/webhook';
 const PORT = process.env.PORT || 3000;
 
-// Setup Dummy Express Server for Render Web Service Health Checks
+let latestQR = null;
+
+// Setup Dummy Express Server for Render Web Service Health Checks and QR Scanning
 const app = express();
+
 app.get('/', (req, res) => res.send('ClimbUP WhatsApp Bot is running!'));
+
+app.get('/qr', (req, res) => {
+    if (!latestQR) {
+        return res.send('<h3>No QR code available right now. Maybe it is already connected?</h3>');
+    }
+    // Generate a beautiful scannable QR code image using a free API
+    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(latestQR)}`;
+    res.send(`
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100vh; font-family:sans-serif;">
+            <h2>Scan this QR code with your Bot's WhatsApp</h2>
+            <img src="${qrImageUrl}" alt="WhatsApp QR Code" style="border: 2px solid black; padding: 10px; border-radius: 10px;" />
+            <p style="color:gray;">This code refreshes automatically. Refresh this page if it expires.</p>
+        </div>
+    `);
+});
+
 app.listen(PORT, () => console.log(`Dummy server listening on port ${PORT} to keep Render happy`));
 
 // Initialize Client with LocalAuth to persist session across restarts
@@ -33,8 +52,9 @@ const client = new Client({
 });
 
 client.on('qr', (qr) => {
-    // Generate and scan this code with your spare phone
-    console.log("Please SCAN the QR code below with your WhatsApp to start the Bot:");
+    latestQR = qr;
+    console.log("Please visit https://climbup-whatsapp-bot.onrender.com/qr in your browser to scan the QR easily!");
+    // Also print to terminal just in case
     qrcode.generate(qr, { small: true });
 });
 
