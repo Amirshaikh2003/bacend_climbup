@@ -1,3 +1,4 @@
+const express = require('express');
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
@@ -6,6 +7,12 @@ const http = require('http'); // Use 'https' if your Render server uses HTTPS
 // Configuration
 // We point this to your Render.com backend URL in production, or localhost during testing.
 const BACKEND_URL = process.env.BACKEND_URL || 'https://bacend-climbup.onrender.com/api/whatsapp/webhook';
+const PORT = process.env.PORT || 3000;
+
+// Setup Dummy Express Server for Render Web Service Health Checks
+const app = express();
+app.get('/', (req, res) => res.send('ClimbUP WhatsApp Bot is running!'));
+app.listen(PORT, () => console.log(`Dummy server listening on port ${PORT} to keep Render happy`));
 
 // Initialize Client with LocalAuth to persist session across restarts
 const client = new Client({
