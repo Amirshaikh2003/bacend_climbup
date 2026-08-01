@@ -48,6 +48,11 @@ const client = new Client({
             '--single-process', // Crucial for Render Free Tier (saves memory)
             '--disable-gpu'
         ]
+    },
+    // Force a specific working WhatsApp Web version to prevent "Couldn't link device" errors
+    webVersionCache: {
+        type: 'remote',
+        remotePath: 'https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/2.2412.54.html',
     }
 });
 
