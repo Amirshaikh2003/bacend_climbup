@@ -69,8 +69,9 @@ async function connectToWhatsApp () {
 
                 // Send to Python webhook
                 await sendToWebhook({
-                    from: senderNumber,
-                    text: text
+                    sender_number: senderNumber,
+                    message: text || "",
+                    has_media: false
                 }, senderId);
 
             } else if (messageType === 'documentMessage' || messageType === 'documentWithCaptionMessage') {
@@ -98,13 +99,12 @@ async function connectToWhatsApp () {
 
                 // Send to Python webhook
                 await sendToWebhook({
-                    from: senderNumber,
-                    text: "",
-                    media: {
-                        mimetype: "application/pdf",
-                        filename: docMsg.fileName || "document.pdf",
-                        data: base64Data
-                    }
+                    sender_number: senderNumber,
+                    message: "",
+                    has_media: true,
+                    media_data: base64Data,
+                    media_mime_type: "application/pdf",
+                    media_filename: docMsg.fileName || "document.pdf"
                 }, senderId);
             } else {
                 await sock.sendMessage(senderId, { text: "Please send a valid PDF document or a `#CLIMBXXXX` code." });
