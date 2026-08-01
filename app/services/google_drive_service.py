@@ -38,7 +38,13 @@ def get_drive_service_for_user(refresh_token: str = None):
     return service
 
 def get_or_create_climbup_folder(service) -> str:
-    """Finds or creates a 'ClimbUP' folder in the user's drive and returns its ID."""
+    """Finds or creates a 'ClimbUP' folder, or uses a specific FOLDER_ID if provided."""
+    
+    # Best approach: Use a specific folder ID shared with the Service Account
+    specific_folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+    if specific_folder_id:
+        return specific_folder_id
+
     folder_name = "ClimbUP"
     # Search for the folder
     query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
