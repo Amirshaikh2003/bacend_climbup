@@ -13,16 +13,26 @@ def get_drive_service_for_user(refresh_token: str = None):
     for uploading to the 5TB Admin Google Drive.
     """
     from google.oauth2 import service_account
+    import json
     
-    # Path to the service account credentials JSON file
-    creds_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "credentials.json")
+    # Secure method: Read from environment variable
+    creds_json_str = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     
-    if not os.path.exists(creds_path):
-        raise FileNotFoundError("Google Cloud Service Account 'credentials.json' not found in backend directory! Please add it to use the 5TB Storage.")
+    if creds_json_str:
+        creds_dict = json.loads(creds_json_str)
+        creds = service_account.Credentials.from_service_account_info(
+            creds_dict, scopes=SCOPES
+        )
+    else:
+        # Fallback to local file (for local development)
+        creds_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "credentials.json")
+        
+        if not os.path.exists(creds_path):
+            raise FileNotFoundError("Google Cloud Service Account credentials not found! Set GOOGLE_CREDENTIALS_JSON env var or add credentials.json file.")
 
-    creds = service_account.Credentials.from_service_account_file(
-        creds_path, scopes=SCOPES
-    )
+        creds = service_account.Credentials.from_service_account_file(
+            creds_path, scopes=SCOPES
+        )
     
     service = build('drive', 'v3', credentials=creds)
     return service

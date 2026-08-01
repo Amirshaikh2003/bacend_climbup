@@ -10,9 +10,23 @@ __pycache__/
 env/
 venv/
 ENV/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
 env.bak/
 venv.bak/
 
 # Project specifics
 dev.db
 *.log
+credentials.json  
+ 
