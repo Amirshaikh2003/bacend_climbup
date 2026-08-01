@@ -121,7 +121,11 @@ async function connectToWhatsApp () {
             }
         } catch (error) {
             console.error("Error processing message:", error);
-            await sock.sendMessage(senderId, { text: "❌ Oops! Something went wrong while processing your message." });
+            try {
+                await sock.sendMessage(senderId, { text: "❌ Oops! Something went wrong while processing your message." });
+            } catch (sendError) {
+                console.error("Failed to send error message back to user:", sendError);
+            }
         }
     });
 }
@@ -176,7 +180,12 @@ async function sendToWebhook(payload, senderId) {
 }
 
 // Polling function for OTPs
+let pollCount = 0;
 async function pollForPendingOTPs() {
+    pollCount++;
+    if (pollCount % 10 === 0) {
+        console.log(`[Debug] Polling OTPs... Key exists: ${!!SUPABASE_KEY}, Sock exists: ${!!sock}`);
+    }
     if (!SUPABASE_KEY || !sock) return;
 
     try {
