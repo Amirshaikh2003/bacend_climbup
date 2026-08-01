@@ -62,7 +62,7 @@ async def generate_link_code(payload: GenerateLinkRequest, token: str = Depends(
 
 def _categorize_pdf(caption: str, subjects: list) -> dict:
     if not caption:
-        return {"type": "Notes", "subject_id": None, "reply_message": "📄 PDF successfully uploaded to your personal ClimbUP Drive Folder!\n*(Tip: Next time, add a caption like 'OS Assignment' to categorize it automatically!)*\n🔗 Link: {link}"}
+        return {"type": "Notes", "subject_id": None, "reply_message": "📄 PDF uploaded to your Drive!\n\n*(Tip: To categorize this file, just reply to me right now with the subject name, e.g. 'Cloud Computing Assignment')*\n\n🔗 Link: {link}"}
     
     subjects_str = json.dumps([{"id": s.get("subject_id"), "name": s.get("subject_name", ""), "code": s.get("subject_code", "")} for s in subjects if s.get("subject_id")])
     
@@ -97,9 +97,64 @@ Return ONLY a valid JSON object matching this schema exactly:
         print("Gemini Categorization Error:", e)
         return {"type": "Notes", "subject_id": None, "reply_message": "📄 PDF successfully uploaded to your Drive! (AI categorization failed)\n🔗 Link: {link}"}
 
-def _chat_with_student(message: str) -> str:
+def _chat_with_student(message: str, sender: str, headers: dict) -> str:
     if not message:
         return "Welcome to ClimbUP WhatsApp Bot. Send a PDF to upload it, or send your #CLIMB code to link your account."
+
+    # 1. Lookup user
+    user_resp = _session.get(f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{sender}", headers=headers)
+    if user_resp.status_code == 200 and len(user_resp.json()) > 0:
+        user_id = user_resp.json()[0]["id"]
+        
+        # 2. Find their most recent resource
+        res_resp = _session.get(f"{SUPABASE_URL}/rest/v1/student_resources?user_id=eq.{user_id}&order=created_at.desc&limit=1", headers=headers)
+        if res_resp.status_code == 200 and len(res_resp.json()) > 0:
+            last_resource = res_resp.json()[0]
+            resource_id = last_resource["id"]
+            
+            # Fetch subjects for matching
+            subjects = []
+            subj_resp = _session.get(f"{SUPABASE_URL}/rest/v1/subjects", headers=headers)
+            if subj_resp.status_code == 200:
+                subjects = subj_resp.json()
+                
+            subjects_str = json.dumps([{"id": s.get("subject_id"), "name": s.get("subject_name", ""), "code": s.get("subject_code", "")} for s in subjects if s.get("subject_id")])
+
+            prompt = f"""You are the ClimbUP WhatsApp assistant. 
+A student sent this text message: "{message}"
+They recently uploaded a PDF named: "{last_resource.get('title', 'Unknown')}".
+Available Subjects: {subjects_str}
+
+Is the student trying to provide a subject or category (like Assignment, Practical, Notes) for their recently uploaded PDF?
+If YES:
+1. Determine if it's "Assignment", "Practical", "Question Paper", or "Notes". Default to Notes.
+2. Match it to the closest Subject ID from the Available Subjects list.
+3. Write a short confirmation message (e.g. "✅ Got it! I've categorized your recent PDF as an Assignment for Cloud Computing.")
+Return EXACTLY this JSON format (no markdown code blocks): {{"is_categorization": true, "type": "...", "subject_id": "...", "reply_message": "..."}}
+
+If NO (they are just saying hi, or asking a general question):
+Write a helpful, friendly reply. Return EXACTLY this JSON format: {{"is_categorization": false, "reply_message": "..."}}"""
+
+            try:
+                response_text = chat_completion([{"role": "user", "content": prompt}], max_tokens=300, temperature=0.1)
+                if response_text.startswith("```json"):
+                    response_text = response_text[7:-3]
+                elif response_text.startswith("```"):
+                    response_text = response_text[3:-3]
+                    
+                data = json.loads(response_text.strip())
+                
+                if data.get("is_categorization") and data.get("subject_id"):
+                    # Update the resource!
+                    update_payload = {"type": data.get("type", "Notes"), "subject_id": data.get("subject_id")}
+                    _session.patch(f"{SUPABASE_URL}/rest/v1/student_resources?id=eq.{resource_id}", json=update_payload, headers=headers)
+                    return data.get("reply_message", "✅ Categorized your file successfully!")
+                elif data.get("reply_message"):
+                    return data.get("reply_message")
+            except Exception as e:
+                print("Gemini Chat Categorization Error:", e)
+                pass # Fall through to generic chat
+
     prompt = f"""You are the ClimbUP WhatsApp assistant. A student sent this message: "{message}"
 Reply in a very helpful, friendly, and brief manner. If they seem lost, remind them they can send PDFs (with captions to categorize them) or a #CLIMB code to link their account."""
     try:
@@ -185,5 +240,5 @@ async def whatsapp_webhook(payload: WebhookPayload):
         return {"reply": "❌ Your number is not linked. Please link it from your ClimbUP Profile first."}
     
     # 3. Handle Normal Conversational Message
-    return {"reply": _chat_with_student(message)}
+    return {"reply": _chat_with_student(message, sender, headers)}
 
