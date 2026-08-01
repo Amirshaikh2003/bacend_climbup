@@ -217,7 +217,7 @@ async function pollForPendingOTPs() {
                                 // 1. Send WhatsApp Message
                                 const jid = `${link.target_number}@s.whatsapp.net`;
                                 await sock.sendMessage(jid, { 
-                                    text: `Hi there! 👋\n\nYour ClimbUP Verification OTP is: *${link.code}*\n\nPlease enter this on the portal to securely connect your account.` 
+                                    text: `ClimbUP OTP: ${link.code}` 
                                 });
                                 console.log(`OTP Sent to ${link.target_number}`);
 
