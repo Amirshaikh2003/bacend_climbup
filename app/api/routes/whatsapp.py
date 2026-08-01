@@ -54,7 +54,7 @@ async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_
         clean_number = f"91{clean_number}"
 
     otp = "".join(random.choices(string.digits, k=4))
-    expires_at = (datetime.utcnow() + timedelta(minutes=15)).isoformat()
+    expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
     
     headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
     data = {
