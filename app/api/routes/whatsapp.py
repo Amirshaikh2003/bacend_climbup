@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from app.services.supabase_service import _session, SUPABASE_URL, SUPABASE_KEY
 from app.services.google_drive_service import upload_pdf_to_user_drive
 from app.api.routes.auth import verify_token
+import json
+from app.services.ai.gemini_client import chat_completion
 
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp Integration"])
 
@@ -58,6 +60,53 @@ async def generate_link_code(payload: GenerateLinkRequest, token: str = Depends(
         "bot_number": os.getenv("WHATSAPP_BOT_NUMBER", "+919999999999"),
     }
 
+def _categorize_pdf(caption: str, subjects: list) -> dict:
+    if not caption:
+        return {"type": "Notes", "subject_id": None, "reply_message": "📄 PDF successfully uploaded to your personal ClimbUP Drive Folder!\n*(Tip: Next time, add a caption like 'OS Assignment' to categorize it automatically!)*\n🔗 Link: {link}"}
+    
+    subjects_str = json.dumps([{"id": s.get("subject_id"), "name": s.get("subject_name", ""), "code": s.get("subject_code", "")} for s in subjects if s.get("subject_id")])
+    
+    prompt = f"""You are an AI assistant for the ClimbUP student platform. A student uploaded a PDF with the following caption: "{caption}"
+Available Subjects: {subjects_str}
+
+Tasks:
+1. Determine if this is an "Assignment", "Practical", "Question Paper", or "Notes". Default to "Notes".
+2. Match the caption to the closest Subject from the Available Subjects. If no match is found, return null for subject_id.
+3. Write a highly positive, encouraging, and short reply message (1-2 sentences) confirming the upload and the categorization. Mention the subject name if matched. Include exactly this placeholder for the drive link: "\n🔗 Link: {{link}}". Do not include emojis in the placeholder itself.
+
+Return ONLY a valid JSON object matching this schema exactly:
+{{
+    "type": "string",
+    "subject_id": "uuid string or null",
+    "reply_message": "string"
+}}"""
+    try:
+        response_text = chat_completion([{"role": "user", "content": prompt}], max_tokens=300, temperature=0.1)
+        if response_text.startswith("```json"):
+            response_text = response_text[7:-3]
+        elif response_text.startswith("```"):
+            response_text = response_text[3:-3]
+            
+        data = json.loads(response_text.strip())
+        return {
+            "type": data.get("type", "Notes"),
+            "subject_id": data.get("subject_id"),
+            "reply_message": data.get("reply_message", "📄 PDF successfully uploaded and categorized!\n🔗 Link: {link}")
+        }
+    except Exception as e:
+        print("Gemini Categorization Error:", e)
+        return {"type": "Notes", "subject_id": None, "reply_message": "📄 PDF successfully uploaded to your Drive! (AI categorization failed)\n🔗 Link: {link}"}
+
+def _chat_with_student(message: str) -> str:
+    if not message:
+        return "Welcome to ClimbUP WhatsApp Bot. Send a PDF to upload it, or send your #CLIMB code to link your account."
+    prompt = f"""You are the ClimbUP WhatsApp assistant. A student sent this message: "{message}"
+Reply in a very helpful, friendly, and brief manner. If they seem lost, remind them they can send PDFs (with captions to categorize them) or a #CLIMB code to link their account."""
+    try:
+        return chat_completion([{"role": "user", "content": prompt}], max_tokens=150, temperature=0.4).strip()
+    except:
+        return "Welcome to ClimbUP WhatsApp Bot. Send a PDF to upload it, or send your #CLIMB code to link your account."
+
 @router.post("/webhook")
 async def whatsapp_webhook(payload: WebhookPayload):
     """Webhook for Node.js WhatsApp Bot to forward messages"""
@@ -102,27 +151,39 @@ async def whatsapp_webhook(payload: WebhookPayload):
                 file_bytes = base64.b64decode(payload.base64_media)
                 public_url = upload_pdf_to_user_drive(refresh_token, file_bytes, payload.filename)
                 
+                # Fetch subjects for AI categorization
+                subjects = []
+                subj_resp = _session.get(f"{SUPABASE_URL}/rest/v1/subjects", headers=headers)
+                if subj_resp.status_code == 200:
+                    subjects = subj_resp.json()
+                
+                # Ask Gemini to categorize
+                ai_result = _categorize_pdf(message, subjects)
+                
                 # Save the resource to Supabase so it shows up in their profile
                 resource_data = {
                     "user_id": user["id"], 
                     "file_url": public_url, 
                     "title": payload.filename or "My Notes",
-                    "type": "Notes",
+                    "type": ai_result["type"],
                     "status": "pending",
                     "sender_name": "WhatsApp Bot"
                 }
                 
-                # If subject_id is required by your DB, you might need to make it nullable or provide a dummy UUID here
-                db_resp = _session.post(f"{SUPABASE_URL}/rest/v1/student_resources", json=resource_data, headers=headers)
+                if ai_result["subject_id"]:
+                    resource_data["subject_id"] = ai_result["subject_id"]
                 
+                db_resp = _session.post(f"{SUPABASE_URL}/rest/v1/student_resources", json=resource_data, headers=headers)
                 if db_resp.status_code not in (200, 201):
                     print("Warning: Failed to save to Supabase student_resources table", db_resp.text)
 
-                return {"reply": f"📄 PDF successfully uploaded to your personal ClimbUP Drive Folder!\n🔗 Link: {public_url}"}
+                reply = ai_result["reply_message"].replace("{link}", public_url)
+                return {"reply": reply}
             except Exception as e:
                 return {"reply": f"❌ Failed to upload PDF: {str(e)}"}
         
         return {"reply": "❌ Your number is not linked. Please link it from your ClimbUP Profile first."}
     
-    return {"reply": "Welcome to ClimbUP WhatsApp Bot. Send a PDF to upload it, or send your #CLIMB code to link your account."}
+    # 3. Handle Normal Conversational Message
+    return {"reply": _chat_with_student(message)}
 

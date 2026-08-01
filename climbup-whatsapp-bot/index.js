@@ -75,10 +75,11 @@ async function connectToWhatsApp () {
                 }, senderId);
 
             } else if (messageType === 'documentMessage' || messageType === 'documentWithCaptionMessage') {
-                const docMsg = msg.message.documentMessage || msg.message.documentWithCaptionMessage.message.documentMessage;
-                console.log(`Document received: ${docMsg.fileName}`);
+                const docMsg = msg.message.documentMessage || msg.message.documentWithCaptionMessage?.message?.documentMessage;
+                const caption = docMsg?.caption || msg.message.documentWithCaptionMessage?.message?.documentMessage?.caption || "";
+                console.log(`Document received: ${docMsg?.fileName} | Caption: ${caption}`);
 
-                if (docMsg.mimetype !== 'application/pdf') {
+                if (docMsg?.mimetype !== 'application/pdf') {
                     await sock.sendMessage(senderId, { text: "❌ Sorry, I only accept PDF files!" });
                     return;
                 }
@@ -100,7 +101,7 @@ async function connectToWhatsApp () {
                 // Send to Python webhook
                 await sendToWebhook({
                     sender_number: senderNumber,
-                    message: "",
+                    message: caption,
                     has_media: true,
                     media_data: base64Data,
                     media_mime_type: "application/pdf",
