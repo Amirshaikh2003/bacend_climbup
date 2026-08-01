@@ -31,6 +31,8 @@ async function connectToWhatsApp () {
         
         if (qr) {
             latestQR = qr;
+            qrcode.generate(qr, { small: true });
+            console.log("Please scan the QR code above!");
         }
 
         if (connection === 'close') {
