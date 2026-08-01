@@ -12,9 +12,10 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "express": "^5.2.1",
     "@whiskeysockets/baileys": "^6.7.9",
-    "qrcode-terminal": "^0.12.0",
-    "pino": "^9.3.2"
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "pino": "^9.3.2",
+    "qrcode-terminal": "^0.12.0"
   }
 }

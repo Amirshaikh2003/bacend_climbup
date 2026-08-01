@@ -7,27 +7,23 @@ from googleapiclient.http import MediaIoBaseUpload
 # Define the scopes for Google Drive API
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
-def get_drive_service_for_user(refresh_token: str):
+def get_drive_service_for_user(refresh_token: str = None):
     """
-    Authenticates and returns a Google Drive service object for a specific user 
-    using their refresh token.
+    Authenticates and returns a Google Drive service object using a Centralized Service Account
+    for uploading to the 5TB Admin Google Drive.
     """
-    client_id = os.environ.get("GOOGLE_CLIENT_ID")
-    client_secret = os.environ.get("GOOGLE_CLIENT_SECRET")
+    from google.oauth2 import service_account
     
-    if not client_id or not client_secret:
-        raise ValueError("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set in .env")
+    # Path to the service account credentials JSON file
+    creds_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "credentials.json")
+    
+    if not os.path.exists(creds_path):
+        raise FileNotFoundError("Google Cloud Service Account 'credentials.json' not found in backend directory! Please add it to use the 5TB Storage.")
 
-    creds = Credentials(
-        token=None,
-        refresh_token=refresh_token,
-        token_uri="https://oauth2.googleapis.com/token",
-        client_id=client_id,
-        client_secret=client_secret,
-        scopes=SCOPES
+    creds = service_account.Credentials.from_service_account_file(
+        creds_path, scopes=SCOPES
     )
     
-    # This will automatically refresh the token when making the first request
     service = build('drive', 'v3', credentials=creds)
     return service
 

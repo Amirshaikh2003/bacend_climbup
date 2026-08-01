@@ -24,11 +24,17 @@ class WebhookPayload(BaseModel):
     mime_type: str = None
     filename: str = None
 
+class OTPRequest(BaseModel):
+    whatsapp_number: str
+
+class OTPVerify(BaseModel):
+    otp_code: str
+
 import jwt
 
-@router.post("/generate-link")
-async def generate_link_code(payload: GenerateLinkRequest, token: str = Depends(verify_token)):
-    """Generates a 6-digit code for linking WhatsApp"""
+@router.post("/request-otp")
+async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_token)):
+    """Generates a 4-digit OTP for WhatsApp Linking and saves it to DB for the Node.js bot to send."""
     try:
         decoded = jwt.decode(token, options={"verify_signature": False})
         user_id = decoded.get("sub")
@@ -38,27 +44,69 @@ async def generate_link_code(payload: GenerateLinkRequest, token: str = Depends(
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token (no sub)")
 
-    code = "#CLIMB" + "".join(random.choices(string.digits, k=4))
+    # Clean whatsapp number (remove +, spaces, etc.)
+    clean_number = "".join(filter(str.isdigit, payload.whatsapp_number))
+    if not clean_number:
+        raise HTTPException(status_code=400, detail="Invalid WhatsApp Number")
+
+    otp = "".join(random.choices(string.digits, k=4))
     expires_at = (datetime.utcnow() + timedelta(minutes=15)).isoformat()
     
-    # Store link code along with user_id and refresh token temporarily
     headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
     data = {
-        "code": code,
+        "code": otp,  # we reuse the code column for OTP
         "user_id": user_id,
         "expires_at": expires_at,
-        "refresh_token": payload.provider_refresh_token
+        "target_number": clean_number,
+        "status": "pending_otp"
     }
     
     resp = _session.post(f"{SUPABASE_URL}/rest/v1/whatsapp_links", json=data, headers=headers)
     if resp.status_code not in (200, 201):
-        raise HTTPException(status_code=500, detail="Failed to save link code")
+        raise HTTPException(status_code=500, detail="Failed to request OTP")
 
-    return {
-        "success": True, 
-        "code": code, 
-        "bot_number": os.getenv("WHATSAPP_BOT_NUMBER", "+919999999999"),
-    }
+    return {"success": True, "message": "OTP requested successfully"}
+
+@router.post("/verify-otp")
+async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_token)):
+    """Verifies the 4-digit OTP and links the WhatsApp number to the user's account."""
+    try:
+        decoded = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded.get("sub")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token format")
+        
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token (no sub)")
+
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    
+    # Find matching OTP
+    resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{payload.otp_code}&user_id=eq.{user_id}&status=in.(pending_otp,otp_sent)", headers=headers)
+    
+    if resp.status_code == 200 and len(resp.json()) > 0:
+        link_data = resp.json()[0]
+        
+        # Check expiry
+        expires_at = datetime.fromisoformat(link_data["expires_at"].replace("Z", "+00:00"))
+        if datetime.utcnow().replace(tzinfo=expires_at.tzinfo) > expires_at:
+            raise HTTPException(status_code=400, detail="OTP expired")
+            
+        # Update users table
+        target_number = link_data.get("target_number")
+        update_data = {"whatsapp_number": target_number}
+        update_resp = _session.patch(
+            f"{SUPABASE_URL}/rest/v1/users?user_id=eq.{user_id}", 
+            json=update_data, 
+            headers=headers
+        )
+        
+        if update_resp.status_code in (200, 204):
+            # Mark OTP as verified
+            _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{payload.otp_code}", json={"status": "verified"}, headers=headers)
+            return {"success": True, "message": "WhatsApp number successfully linked!"}
+            
+    raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
 def _categorize_pdf(caption: str, subjects: list) -> dict:
     if not caption:
@@ -99,7 +147,7 @@ Return ONLY a valid JSON object matching this schema exactly:
 
 def _chat_with_student(message: str, sender: str, headers: dict) -> str:
     if not message:
-        return "Welcome to ClimbUP WhatsApp Bot. Send a PDF or Image to upload it, or send your #CLIMB code to link your account."
+        return "Welcome to ClimbUP WhatsApp Bot. Send a PDF or Image to upload it securely to your account."
 
     # 1. Lookup user
     user_resp = _session.get(f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{sender}", headers=headers)
@@ -156,11 +204,11 @@ Write a helpful, friendly reply. Return EXACTLY this JSON format: {{"is_categori
                 pass # Fall through to generic chat
 
     prompt = f"""You are the ClimbUP WhatsApp assistant. A student sent this message: "{message}"
-Reply in a very helpful, friendly, and brief manner. If they seem lost, remind them they can send PDFs/Images (with captions to categorize them) or a #CLIMB code to link their account."""
+Reply in a very helpful, friendly, and brief manner. If they seem lost, remind them they can send PDFs/Images (with captions to categorize them) or link their account from the student portal."""
     try:
         return chat_completion([{"role": "user", "content": prompt}], max_tokens=150, temperature=0.4).strip()
     except:
-        return "Welcome to ClimbUP WhatsApp Bot. Send a PDF or Image to upload it, or send your #CLIMB code to link your account."
+        return "Welcome to ClimbUP WhatsApp Bot. Send a PDF or Image to upload it securely to your account."
 
 @router.post("/webhook")
 async def whatsapp_webhook(payload: WebhookPayload):
@@ -169,44 +217,18 @@ async def whatsapp_webhook(payload: WebhookPayload):
     sender = payload.sender_number
     headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
     
-    # 1. Handle Link Code
-    if message.startswith("#CLIMB"):
-        # Look up link code (URL encode to handle '#' character)
-        import urllib.parse
-        safe_message = urllib.parse.quote(message)
-        resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{safe_message}", headers=headers)
-        if resp.status_code == 200 and len(resp.json()) > 0:
-            link_data = resp.json()[0]
-            # Save to users table
-            update_data = {
-                "whatsapp_number": sender,
-                "google_refresh_token": link_data.get("refresh_token")
-            }
-            update_resp = _session.patch(
-                f"{SUPABASE_URL}/rest/v1/users?user_id=eq.{link_data['user_id']}", 
-                json=update_data, 
-                headers=headers
-            )
-            if update_resp.status_code in (200, 204):
-                return {"reply": "✅ Your WhatsApp number has been successfully linked to ClimbUP! You can now send PDFs or Images here."}
-        
-        return {"reply": "❌ Invalid or expired link code. Please generate a new one from your ClimbUP Profile."}
-    
-    # 2. Handle Media Upload
+    # 1. Handle Media Upload
     if payload.has_media and payload.mime_type in ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']:
         # Find user by whatsapp_number
         resp = _session.get(f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{sender}", headers=headers)
         if resp.status_code == 200 and len(resp.json()) > 0:
             user = resp.json()[0]
-            refresh_token = user.get("google_refresh_token")
             
-            if not refresh_token:
-                return {"reply": "❌ Error: Google Drive access missing. Please re-link your WhatsApp from Profile."}
-
             try:
-                # Upload to Google Drive using the user's refresh token
+                # Upload to Admin's 5TB Google Drive
+                # Since we are using a Service Account for centralized storage, we don't need a refresh token.
                 file_bytes = base64.b64decode(payload.base64_media)
-                public_url = upload_file_to_user_drive(refresh_token, file_bytes, payload.filename, payload.mime_type)
+                public_url = upload_file_to_user_drive(None, file_bytes, payload.filename, payload.mime_type)
                 
                 # Fetch subjects for AI categorization
                 subjects = []

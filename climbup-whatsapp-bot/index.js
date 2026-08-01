@@ -4,12 +4,15 @@ const express = require('express');
 const qrcode = require('qrcode-terminal');
 const httpModule = require('https'); 
 const fs = require('fs');
+require('dotenv').config({ path: '../.env' });
 
 const app = express();
 const port = 3000;
 
 // The backend URL running on Render
 const BACKEND_URL = "https://bacend-climbup.onrender.com/api/whatsapp/webhook";
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://eboxyporrwoucgytntre.supabase.co"; // Replace if different
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
 let latestQR = null;
 let sock;
@@ -168,8 +171,74 @@ async function sendToWebhook(payload, senderId) {
     req.end();
 }
 
+// Polling function for OTPs
+async function pollForPendingOTPs() {
+    if (!SUPABASE_KEY || !sock) return;
+
+    try {
+        const url = new URL(`${SUPABASE_URL}/rest/v1/whatsapp_links?status=eq.pending_otp`);
+        const options = {
+            hostname: url.hostname,
+            path: url.pathname + url.search,
+            method: 'GET',
+            headers: {
+                'apikey': SUPABASE_KEY,
+                'Authorization': `Bearer ${SUPABASE_KEY}`
+            }
+        };
+
+        const req = httpModule.request(options, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', async () => {
+                if (res.statusCode === 200 && data) {
+                    try {
+                        const pendingLinks = JSON.parse(data);
+                        for (const link of pendingLinks) {
+                            if (link.target_number && link.code) {
+                                // 1. Send WhatsApp Message
+                                const jid = `${link.target_number}@s.whatsapp.net`;
+                                await sock.sendMessage(jid, { 
+                                    text: `Hi there! 👋\n\nYour ClimbUP Verification OTP is: *${link.code}*\n\nPlease enter this on the portal to securely connect your account.` 
+                                });
+                                console.log(`OTP Sent to ${link.target_number}`);
+
+                                // 2. Mark as sent in DB
+                                const updateOptions = {
+                                    hostname: url.hostname,
+                                    path: `/rest/v1/whatsapp_links?code=eq.${link.code}`,
+                                    method: 'PATCH',
+                                    headers: {
+                                        'apikey': SUPABASE_KEY,
+                                        'Authorization': `Bearer ${SUPABASE_KEY}`,
+                                        'Content-Type': 'application/json'
+                                    }
+                                };
+                                const patchReq = httpModule.request(updateOptions, (patchRes) => {
+                                    // ignore patch response for now
+                                });
+                                patchReq.write(JSON.stringify({ status: 'otp_sent' }));
+                                patchReq.end();
+                            }
+                        }
+                    } catch(e) {
+                        console.error("Error processing pending OTPs:", e);
+                    }
+                }
+            });
+        });
+        req.on('error', (e) => console.error("OTP Poll Error:", e));
+        req.end();
+    } catch (e) {
+        console.error(e);
+    }
+}
+
 // Start connection
 connectToWhatsApp();
+
+// Start OTP polling every 3 seconds
+setInterval(pollForPendingOTPs, 3000);
 
 app.listen(port, () => {
     console.log(`Dummy server listening on port ${port} to keep Render happy`);
