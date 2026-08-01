@@ -14,6 +14,11 @@ const BACKEND_URL = "https://bacend-climbup.onrender.com/api/whatsapp/webhook";
 const SUPABASE_URL = process.env.SUPABASE_URL || "https://jueoglgbseoxszygpjdb.supabase.co"; 
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
+console.log(`[INIT] Backend URL: ${BACKEND_URL}`);
+console.log(`[INIT] Supabase URL: ${SUPABASE_URL}`);
+console.log(`[INIT] Supabase Key Exists: ${!!SUPABASE_KEY}`);
+
+
 let latestQR = null;
 let sock;
 
