@@ -106,12 +106,16 @@ async def whatsapp_webhook(payload: WebhookPayload):
                 resource_data = {
                     "user_id": user["id"], 
                     "file_url": public_url, 
-                    "title": payload.filename or "My Notes"
+                    "title": payload.filename or "My Notes",
+                    "type": "Notes",
+                    "status": "pending",
+                    "sender_name": "WhatsApp Bot"
                 }
+                
+                # If subject_id is required by your DB, you might need to make it nullable or provide a dummy UUID here
                 db_resp = _session.post(f"{SUPABASE_URL}/rest/v1/student_resources", json=resource_data, headers=headers)
                 
                 if db_resp.status_code not in (200, 201):
-                    # Log the error but still tell the user it uploaded to Drive
                     print("Warning: Failed to save to Supabase student_resources table", db_resp.text)
 
                 return {"reply": f"📄 PDF successfully uploaded to your personal ClimbUP Drive Folder!\n🔗 Link: {public_url}"}
