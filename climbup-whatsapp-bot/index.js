@@ -56,10 +56,14 @@ async function connectToWhatsApp () {
     sock.ev.on('messages.upsert', async m => {
         const msg = m.messages[0];
         
-        // Ignore messages from ourselves or if there's no message
+        // Ignore messages from ourselves, if there's no message, or if it's from a group
         if (!msg.message || msg.key.fromMe) return;
-
+        
         const senderId = msg.key.remoteJid;
+        if (senderId.includes('@g.us')) {
+            return; // Ignore group messages
+        }
+
         const senderNumber = senderId.split('@')[0];
         console.log(`📩 Received message from ${senderNumber}`);
 
