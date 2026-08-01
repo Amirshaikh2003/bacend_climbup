@@ -135,6 +135,7 @@ async function sendToWebhook(payload, senderId) {
         res.on('data', (chunk) => { data += chunk; });
         res.on('end', async () => {
             console.log(`Webhook response status: ${res.statusCode}`);
+            console.log(`Webhook response body: ${data}`);
             
             try {
                 // If it's a JSON response, parse it.
