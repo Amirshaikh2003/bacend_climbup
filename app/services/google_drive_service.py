@@ -9,30 +9,24 @@ SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 def get_drive_service_for_user(refresh_token: str = None):
     """
-    Authenticates and returns a Google Drive service object using a Centralized Service Account
+    Authenticates and returns a Google Drive service object using a Centralized OAuth Refresh Token
     for uploading to the 5TB Admin Google Drive.
     """
-    from google.oauth2 import service_account
-    import json
+    client_id = os.getenv("GOOGLE_ADMIN_CLIENT_ID")
+    client_secret = os.getenv("GOOGLE_ADMIN_CLIENT_SECRET")
+    admin_refresh_token = os.getenv("GOOGLE_ADMIN_REFRESH_TOKEN")
     
-    # Secure method: Read from environment variable
-    creds_json_str = os.environ.get("GOOGLE_CREDENTIALS_JSON")
-    
-    if creds_json_str:
-        creds_dict = json.loads(creds_json_str)
-        creds = service_account.Credentials.from_service_account_info(
-            creds_dict, scopes=SCOPES
-        )
-    else:
-        # Fallback to local file (for local development)
-        creds_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "credentials.json")
-        
-        if not os.path.exists(creds_path):
-            raise FileNotFoundError("Google Cloud Service Account credentials not found! Set GOOGLE_CREDENTIALS_JSON env var or add credentials.json file.")
+    if not all([client_id, client_secret, admin_refresh_token]):
+        raise ValueError("Missing GOOGLE_ADMIN_CLIENT_ID, GOOGLE_ADMIN_CLIENT_SECRET, or GOOGLE_ADMIN_REFRESH_TOKEN in environment variables.")
 
-        creds = service_account.Credentials.from_service_account_file(
-            creds_path, scopes=SCOPES
-        )
+    creds = Credentials(
+        token=None,
+        refresh_token=admin_refresh_token,
+        client_id=client_id,
+        client_secret=client_secret,
+        token_uri="https://oauth2.googleapis.com/token",
+        scopes=SCOPES
+    )
     
     service = build('drive', 'v3', credentials=creds)
     return service
