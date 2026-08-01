@@ -74,13 +74,14 @@ async function connectToWhatsApp () {
                     has_media: false
                 }, senderId);
 
-            } else if (messageType === 'documentMessage' || messageType === 'documentWithCaptionMessage') {
-                const docMsg = msg.message.documentMessage || msg.message.documentWithCaptionMessage?.message?.documentMessage;
-                const caption = docMsg?.caption || msg.message.documentWithCaptionMessage?.message?.documentMessage?.caption || "";
-                console.log(`Document received: ${docMsg?.fileName} | Caption: ${caption}`);
+            } else if (messageType === 'documentMessage' || messageType === 'documentWithCaptionMessage' || messageType === 'imageMessage') {
+                const docMsg = msg.message.documentMessage || msg.message.documentWithCaptionMessage?.message?.documentMessage || msg.message.imageMessage;
+                const caption = docMsg?.caption || msg.message.documentWithCaptionMessage?.message?.documentMessage?.caption || msg.message.imageMessage?.caption || "";
+                console.log(`Media received. Mime: ${docMsg?.mimetype} | Caption: ${caption}`);
 
-                if (docMsg?.mimetype !== 'application/pdf') {
-                    await sock.sendMessage(senderId, { text: "❌ Sorry, I only accept PDF files!" });
+                const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+                if (!allowedTypes.includes(docMsg?.mimetype)) {
+                    await sock.sendMessage(senderId, { text: "❌ Sorry, I only accept PDFs and Images!" });
                     return;
                 }
 
@@ -96,18 +97,20 @@ async function connectToWhatsApp () {
                 );
                 
                 const base64Data = buffer.toString('base64');
-                console.log("PDF downloaded and converted to base64 successfully.");
+                console.log("Media downloaded and converted to base64 successfully.");
+
+                const filename = docMsg?.fileName || (docMsg?.mimetype === 'application/pdf' ? 'document.pdf' : 'image.jpg');
 
                 await sendToWebhook({
                     sender_number: senderNumber,
                     message: caption,
                     has_media: true,
                     base64_media: base64Data,
-                    mime_type: "application/pdf",
-                    filename: docMsg?.fileName || "document.pdf"
+                    mime_type: docMsg?.mimetype || "application/pdf",
+                    filename: filename
                 }, senderId);
             } else {
-                await sock.sendMessage(senderId, { text: "Please send a valid PDF document or a `#CLIMBXXXX` code." });
+                await sock.sendMessage(senderId, { text: "Please send a valid PDF, Image, or a `#CLIMBXXXX` code." });
             }
         } catch (error) {
             console.error("Error processing message:", error);

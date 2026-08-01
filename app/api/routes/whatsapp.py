@@ -6,7 +6,7 @@ import base64
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 from app.services.supabase_service import _session, SUPABASE_URL, SUPABASE_KEY
-from app.services.google_drive_service import upload_pdf_to_user_drive
+from app.services.google_drive_service import upload_file_to_user_drive
 from app.api.routes.auth import verify_token
 import json
 from app.services.ai.gemini_client import chat_completion
@@ -62,11 +62,11 @@ async def generate_link_code(payload: GenerateLinkRequest, token: str = Depends(
 
 def _categorize_pdf(caption: str, subjects: list) -> dict:
     if not caption:
-        return {"type": "Notes", "subject_id": None, "reply_message": "📄 PDF uploaded to your Drive!\n\n*(Tip: To categorize this file, just reply to me right now with the subject name, e.g. 'Cloud Computing Assignment')*\n\n🔗 Link: {link}"}
+        return {"type": "Notes", "subject_id": None, "reply_message": "📄 File uploaded to your Drive!\n\n*(Tip: To categorize this file, just reply to me right now with the subject name, e.g. 'Cloud Computing Assignment')*\n\n🔗 Link: {link}"}
     
     subjects_str = json.dumps([{"id": s.get("subject_id"), "name": s.get("subject_name", ""), "code": s.get("subject_code", "")} for s in subjects if s.get("subject_id")])
     
-    prompt = f"""You are an AI assistant for the ClimbUP student platform. A student uploaded a PDF with the following caption: "{caption}"
+    prompt = f"""You are an AI assistant for the ClimbUP student platform. A student uploaded a document/image with the following caption: "{caption}"
 Available Subjects: {subjects_str}
 
 Tasks:
@@ -91,15 +91,15 @@ Return ONLY a valid JSON object matching this schema exactly:
         return {
             "type": data.get("type", "Notes"),
             "subject_id": data.get("subject_id"),
-            "reply_message": data.get("reply_message", "📄 PDF successfully uploaded and categorized!\n🔗 Link: {link}")
+            "reply_message": data.get("reply_message", "📄 File successfully uploaded and categorized!\n🔗 Link: {link}")
         }
     except Exception as e:
         print("Gemini Categorization Error:", e)
-        return {"type": "Notes", "subject_id": None, "reply_message": "📄 PDF successfully uploaded to your Drive! (AI categorization failed)\n🔗 Link: {link}"}
+        return {"type": "Notes", "subject_id": None, "reply_message": "📄 File successfully uploaded to your Drive! (AI categorization failed)\n🔗 Link: {link}"}
 
 def _chat_with_student(message: str, sender: str, headers: dict) -> str:
     if not message:
-        return "Welcome to ClimbUP WhatsApp Bot. Send a PDF to upload it, or send your #CLIMB code to link your account."
+        return "Welcome to ClimbUP WhatsApp Bot. Send a PDF or Image to upload it, or send your #CLIMB code to link your account."
 
     # 1. Lookup user
     user_resp = _session.get(f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{sender}", headers=headers)
@@ -122,14 +122,14 @@ def _chat_with_student(message: str, sender: str, headers: dict) -> str:
 
             prompt = f"""You are the ClimbUP WhatsApp assistant. 
 A student sent this text message: "{message}"
-They recently uploaded a PDF named: "{last_resource.get('title', 'Unknown')}".
+They recently uploaded a file named: "{last_resource.get('title', 'Unknown')}".
 Available Subjects: {subjects_str}
 
-Is the student trying to provide a subject or category (like Assignment, Practical, Notes) for their recently uploaded PDF?
+Is the student trying to provide a subject or category (like Assignment, Practical, Notes) for their recently uploaded file?
 If YES:
 1. Determine if it's "Assignment", "Practical", "Question Paper", or "Notes". Default to Notes.
 2. Match it to the closest Subject ID from the Available Subjects list.
-3. Write a short confirmation message (e.g. "✅ Got it! I've categorized your recent PDF as an Assignment for Cloud Computing.")
+3. Write a short confirmation message (e.g. "✅ Got it! I've categorized your recent file as an Assignment for Cloud Computing.")
 Return EXACTLY this JSON format (no markdown code blocks): {{"is_categorization": true, "type": "...", "subject_id": "...", "reply_message": "..."}}
 
 If NO (they are just saying hi, or asking a general question):
@@ -156,11 +156,11 @@ Write a helpful, friendly reply. Return EXACTLY this JSON format: {{"is_categori
                 pass # Fall through to generic chat
 
     prompt = f"""You are the ClimbUP WhatsApp assistant. A student sent this message: "{message}"
-Reply in a very helpful, friendly, and brief manner. If they seem lost, remind them they can send PDFs (with captions to categorize them) or a #CLIMB code to link their account."""
+Reply in a very helpful, friendly, and brief manner. If they seem lost, remind them they can send PDFs/Images (with captions to categorize them) or a #CLIMB code to link their account."""
     try:
         return chat_completion([{"role": "user", "content": prompt}], max_tokens=150, temperature=0.4).strip()
     except:
-        return "Welcome to ClimbUP WhatsApp Bot. Send a PDF to upload it, or send your #CLIMB code to link your account."
+        return "Welcome to ClimbUP WhatsApp Bot. Send a PDF or Image to upload it, or send your #CLIMB code to link your account."
 
 @router.post("/webhook")
 async def whatsapp_webhook(payload: WebhookPayload):
@@ -190,8 +190,8 @@ async def whatsapp_webhook(payload: WebhookPayload):
         
         return {"reply": "❌ Invalid or expired link code. Please generate a new one from your ClimbUP Profile."}
     
-    # 2. Handle PDF Upload
-    if payload.has_media and payload.mime_type == 'application/pdf':
+    # 2. Handle Media Upload
+    if payload.has_media and payload.mime_type in ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']:
         # Find user by whatsapp_number
         resp = _session.get(f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{sender}", headers=headers)
         if resp.status_code == 200 and len(resp.json()) > 0:
@@ -204,7 +204,7 @@ async def whatsapp_webhook(payload: WebhookPayload):
             try:
                 # Upload to Google Drive using the user's refresh token
                 file_bytes = base64.b64decode(payload.base64_media)
-                public_url = upload_pdf_to_user_drive(refresh_token, file_bytes, payload.filename)
+                public_url = upload_file_to_user_drive(refresh_token, file_bytes, payload.filename, payload.mime_type)
                 
                 # Fetch subjects for AI categorization
                 subjects = []

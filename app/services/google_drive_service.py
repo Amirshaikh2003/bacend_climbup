@@ -49,9 +49,9 @@ def get_or_create_climbup_folder(service) -> str:
         return folder.get('id')
     return items[0].get('id')
 
-def upload_pdf_to_user_drive(refresh_token: str, file_bytes: bytes, filename: str) -> str:
+def upload_file_to_user_drive(refresh_token: str, file_bytes: bytes, filename: str, mime_type: str = 'application/pdf') -> str:
     """
-    Uploads a PDF to the user's personal Google Drive in the ClimbUP folder.
+    Uploads a file to the user's personal Google Drive in the ClimbUP folder.
     Returns the public web view URL.
     """
     service = get_drive_service_for_user(refresh_token)
@@ -64,7 +64,7 @@ def upload_pdf_to_user_drive(refresh_token: str, file_bytes: bytes, filename: st
         'name': filename,
         'parents': [folder_id]
     }
-    media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype='application/pdf', resumable=True)
+    media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime_type, resumable=True)
     
     file = service.files().create(
         body=file_metadata, 
