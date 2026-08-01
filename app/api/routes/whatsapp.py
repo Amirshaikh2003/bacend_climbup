@@ -102,9 +102,17 @@ async def whatsapp_webhook(payload: WebhookPayload):
                 file_bytes = base64.b64decode(payload.base64_media)
                 public_url = upload_pdf_to_user_drive(refresh_token, file_bytes, payload.filename)
                 
-                # Here you would optionally insert into `student_resources` in Supabase
-                # resource_data = {"user_id": user["id"], "file_url": public_url, "title": payload.filename}
-                # _session.post(f"{SUPABASE_URL}/rest/v1/student_resources", json=resource_data, headers=headers)
+                # Save the resource to Supabase so it shows up in their profile
+                resource_data = {
+                    "user_id": user["id"], 
+                    "file_url": public_url, 
+                    "title": payload.filename or "My Notes"
+                }
+                db_resp = _session.post(f"{SUPABASE_URL}/rest/v1/student_resources", json=resource_data, headers=headers)
+                
+                if db_resp.status_code not in (200, 201):
+                    # Log the error but still tell the user it uploaded to Drive
+                    print("Warning: Failed to save to Supabase student_resources table", db_resp.text)
 
                 return {"reply": f"📄 PDF successfully uploaded to your personal ClimbUP Drive Folder!\n🔗 Link: {public_url}"}
             except Exception as e:
