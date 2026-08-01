@@ -181,12 +181,12 @@ async def whatsapp_webhook(payload: WebhookPayload):
                 "google_refresh_token": link_data.get("refresh_token")
             }
             update_resp = _session.patch(
-                f"{SUPABASE_URL}/rest/v1/users?id=eq.{link_data['user_id']}", 
+                f"{SUPABASE_URL}/rest/v1/users?user_id=eq.{link_data['user_id']}", 
                 json=update_data, 
                 headers=headers
             )
             if update_resp.status_code in (200, 204):
-                return {"reply": "✅ Your WhatsApp number has been successfully linked to ClimbUP! You can now send PDFs here."}
+                return {"reply": "✅ Your WhatsApp number has been successfully linked to ClimbUP! You can now send PDFs or Images here."}
         
         return {"reply": "❌ Invalid or expired link code. Please generate a new one from your ClimbUP Profile."}
     
