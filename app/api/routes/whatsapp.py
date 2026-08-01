@@ -159,7 +159,7 @@ def _chat_with_student(message: str, sender: str, headers: dict) -> str:
     # 1. Lookup user
     user_resp = _session.get(f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{sender}", headers=headers)
     if user_resp.status_code == 200 and len(user_resp.json()) > 0:
-        user_id = user_resp.json()[0]["id"]
+        user_id = user_resp.json()[0].get("user_id") or user_resp.json()[0].get("id")
         
         # 2. Find their most recent resource
         res_resp = _session.get(f"{SUPABASE_URL}/rest/v1/student_resources?user_id=eq.{user_id}&order=created_at.desc&limit=1", headers=headers)
@@ -261,7 +261,7 @@ async def whatsapp_webhook(payload: WebhookPayload):
                 
                 # Save the resource to Supabase so it shows up in their profile
                 resource_data = {
-                    "user_id": user["id"], 
+                    "user_id": user.get("user_id") or user.get("id"), 
                     "file_url": public_url, 
                     "title": payload.filename or "My Notes",
                     "type": ai_result["type"],
