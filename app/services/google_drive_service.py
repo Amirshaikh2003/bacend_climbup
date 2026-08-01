@@ -34,8 +34,8 @@ def get_drive_service_for_user(refresh_token: str = None):
 def get_or_create_climbup_folder(service) -> str:
     """Finds or creates a 'ClimbUP' folder, or uses a specific FOLDER_ID if provided."""
     
-    # Best approach: Use a specific folder ID shared with the Service Account
-    specific_folder_id = os.environ.get("GOOGLE_DRIVE_FOLDER_ID")
+    # Best approach: Use a specific folder ID shared with the Service Account or Admin Account
+    specific_folder_id = os.environ.get("TARGET_FOLDER_ID")
     if specific_folder_id:
         return specific_folder_id
 
