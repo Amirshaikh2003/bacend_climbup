@@ -171,8 +171,10 @@ async def whatsapp_webhook(payload: WebhookPayload):
     
     # 1. Handle Link Code
     if message.startswith("#CLIMB"):
-        # Look up link code
-        resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{message}", headers=headers)
+        # Look up link code (URL encode to handle '#' character)
+        import urllib.parse
+        safe_message = urllib.parse.quote(message)
+        resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{safe_message}", headers=headers)
         if resp.status_code == 200 and len(resp.json()) > 0:
             link_data = resp.json()[0]
             # Save to users table
