@@ -22,12 +22,19 @@ class WebhookPayload(BaseModel):
     mime_type: str = None
     filename: str = None
 
+import jwt
+
 @router.post("/generate-link")
-async def generate_link_code(payload: GenerateLinkRequest, token: dict = Depends(verify_token)):
+async def generate_link_code(payload: GenerateLinkRequest, token: str = Depends(verify_token)):
     """Generates a 6-digit code for linking WhatsApp"""
-    user_id = token.get("sub")
+    try:
+        decoded = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded.get("sub")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token format")
+        
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="Invalid token (no sub)")
 
     code = "#CLIMB" + "".join(random.choices(string.digits, k=4))
     expires_at = (datetime.utcnow() + timedelta(minutes=15)).isoformat()
