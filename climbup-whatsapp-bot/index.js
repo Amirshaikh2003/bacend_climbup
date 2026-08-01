@@ -142,7 +142,9 @@ async function sendToWebhook(payload, senderId) {
                 let replyText = data;
                 try {
                     const jsonData = JSON.parse(data);
-                    if (jsonData.message) {
+                    if (jsonData.reply) {
+                        replyText = jsonData.reply;
+                    } else if (jsonData.message) {
                         replyText = jsonData.message;
                     }
                 } catch(e) {}
