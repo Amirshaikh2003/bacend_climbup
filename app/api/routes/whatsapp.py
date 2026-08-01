@@ -48,6 +48,10 @@ async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_
     clean_number = "".join(filter(str.isdigit, payload.whatsapp_number))
     if not clean_number:
         raise HTTPException(status_code=400, detail="Invalid WhatsApp Number")
+        
+    # If it's a 10-digit Indian number without country code, automatically add '91'
+    if len(clean_number) == 10:
+        clean_number = f"91{clean_number}"
 
     otp = "".join(random.choices(string.digits, k=4))
     expires_at = (datetime.utcnow() + timedelta(minutes=15)).isoformat()
@@ -63,7 +67,8 @@ async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_
     
     resp = _session.post(f"{SUPABASE_URL}/rest/v1/whatsapp_links", json=data, headers=headers)
     if resp.status_code not in (200, 201):
-        raise HTTPException(status_code=500, detail="Failed to request OTP")
+        print(f"Supabase Error: {resp.text}")
+        raise HTTPException(status_code=500, detail=f"Failed to request OTP: {resp.text}")
 
     return {"success": True, "message": "OTP requested successfully"}
 

@@ -11,8 +11,8 @@ const port = 3000;
 
 // The backend URL running on Render
 const BACKEND_URL = "https://bacend-climbup.onrender.com/api/whatsapp/webhook";
-const SUPABASE_URL = process.env.SUPABASE_URL || "https://eboxyporrwoucgytntre.supabase.co"; // Replace if different
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL || "https://jueoglgbseoxszygpjdb.supabase.co"; 
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
 let latestQR = null;
 let sock;
