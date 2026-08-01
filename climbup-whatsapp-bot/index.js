@@ -98,14 +98,13 @@ async function connectToWhatsApp () {
                 const base64Data = buffer.toString('base64');
                 console.log("PDF downloaded and converted to base64 successfully.");
 
-                // Send to Python webhook
                 await sendToWebhook({
                     sender_number: senderNumber,
                     message: caption,
                     has_media: true,
-                    media_data: base64Data,
-                    media_mime_type: "application/pdf",
-                    media_filename: docMsg.fileName || "document.pdf"
+                    base64_media: base64Data,
+                    mime_type: "application/pdf",
+                    filename: docMsg?.fileName || "document.pdf"
                 }, senderId);
             } else {
                 await sock.sendMessage(senderId, { text: "Please send a valid PDF document or a `#CLIMBXXXX` code." });
