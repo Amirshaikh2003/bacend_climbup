@@ -115,7 +115,11 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
         
     # 2. Check if it's a valid Supabase User JWT
     supabase_url = os.environ.get("SUPABASE_URL")
-    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    supabase_key = (
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+        or os.getenv("SUPABASE_ANON_KEY", "").strip()
+        or os.getenv("SUPABASE_KEY", "").strip()
+    )
     
     if supabase_url and supabase_key:
         import urllib.request
