@@ -9,7 +9,11 @@ from app.services.supabase_service import _session, SUPABASE_URL, SUPABASE_KEY
 from app.services.google_drive_service import upload_file_to_user_drive
 from app.api.routes.auth import verify_token
 import json
+import requests
 from app.services.ai.gemini_client import chat_completion
+
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
+WHATSAPP_PHONE_ID = os.getenv("WHATSAPP_PHONE_ID")
 
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp Integration"])
 
@@ -62,13 +66,37 @@ async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_
         "user_id": user_id,
         "expires_at": expires_at,
         "target_number": clean_number,
-        "status": "pending_otp"
+        "status": "otp_sent"
     }
     
     resp = _session.post(f"{SUPABASE_URL}/rest/v1/whatsapp_links", json=data, headers=headers)
     if resp.status_code not in (200, 201):
         print(f"Supabase Error: {resp.text}")
         raise HTTPException(status_code=500, detail=f"Failed to request OTP: {resp.text}")
+
+    # Send OTP via Official Meta WhatsApp Cloud API
+    if WHATSAPP_TOKEN and WHATSAPP_PHONE_ID:
+        meta_url = f"https://graph.facebook.com/v17.0/{WHATSAPP_PHONE_ID}/messages"
+        meta_headers = {
+            "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        meta_payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": clean_number,
+            "type": "text",
+            "text": {
+                "preview_url": False,
+                "body": f"ClimbUP OTP: {otp}"
+            }
+        }
+        
+        meta_resp = requests.post(meta_url, headers=meta_headers, json=meta_payload)
+        if meta_resp.status_code not in (200, 201):
+            print(f"Meta API Error: {meta_resp.text}")
+            # We log it but don't fail the request completely so user can still see the DB entry
+            # Usually fails if 24-hour window isn't active without a template.
 
     return {"success": True, "message": "OTP requested successfully"}
 
