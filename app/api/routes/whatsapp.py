@@ -35,6 +35,9 @@ class OTPRequest(BaseModel):
 class OTPVerify(BaseModel):
     otp_code: str = None
     otp: str = None
+    code: str = None
+    otpCode: str = None
+    pin: str = None
 
 import jwt
 
@@ -163,9 +166,10 @@ async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_to
 
     service_headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
     
-    # Find matching OTP
-    actual_code = payload.otp_code or payload.otp
+    # Find matching OTP across any possible key
+    actual_code = payload.code or payload.otp_code or payload.otp or payload.otpCode or payload.pin
     if not actual_code:
+        print("OTP code missing in payload")
         raise HTTPException(status_code=400, detail="OTP code missing")
         
     actual_code = str(actual_code).strip()
