@@ -53,7 +53,7 @@ async def generate_whatsapp_link(token: str = Depends(verify_token)):
     code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     expires_at = datetime.utcnow() + timedelta(minutes=15)
     
-    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {token}"}
     
     data = {
         "user_id": user_id,
@@ -96,7 +96,7 @@ async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_
     otp = "".join(random.choices(string.digits, k=4))
     expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
     
-    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {token}"}
     
     data = {
         "code": otp,  # we reuse the code column for OTP
@@ -149,7 +149,7 @@ async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_to
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token (no sub)")
 
-    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {token}"}
     
     # Find matching OTP
     actual_code = payload.otp_code or payload.otp
