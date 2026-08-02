@@ -366,6 +366,7 @@ async def verify_whatsapp_webhook(request: Request):
 async def whatsapp_webhook(request: Request):
     """Receives incoming messages from Meta WhatsApp API"""
     body = await request.json()
+    print("WEBHOOK RECEIVED FROM META:", json.dumps(body))
     
     if body.get("object") != "whatsapp_business_account":
         raise HTTPException(status_code=404, detail="Not a WhatsApp webhook")
@@ -388,11 +389,20 @@ async def whatsapp_webhook(request: Request):
                 
                 headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
                 
-                # Find user by whatsapp_number
+                # Find user by whatsapp_number (check with and without country code)
+                clean_sender = "".join(filter(str.isdigit, str(sender)))
+                possible_numbers = [clean_sender]
+                if clean_sender.startswith("91") and len(clean_sender) == 12:
+                    possible_numbers.append(clean_sender[2:])
+                elif len(clean_sender) == 10:
+                    possible_numbers.append(f"91{clean_sender}")
+
                 user = None
-                resp = _session.get(f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{sender}", headers=headers)
-                if resp.status_code == 200 and len(resp.json()) > 0:
-                    user = resp.json()[0]
+                for num in possible_numbers:
+                    resp = _session.get(f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{num}", headers=headers)
+                    if resp.status_code == 200 and len(resp.json()) > 0:
+                        user = resp.json()[0]
+                        break
 
                 text_message = ""
                 has_media = False
