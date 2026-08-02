@@ -138,7 +138,7 @@ async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_to
         if update_resp.status_code in (200, 204):
             # Mark OTP as verified
             _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{payload.otp_code}", json={"status": "verified"}, headers=headers)
-            return {"success": True, "message": "WhatsApp number successfully linked!"}
+            return {"success": True, "status": "verified", "message": "WhatsApp number successfully linked!"}
             
     raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
