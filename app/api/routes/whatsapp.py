@@ -54,6 +54,10 @@ async def generate_whatsapp_link(token: str = Depends(verify_token)):
     expires_at = datetime.utcnow() + timedelta(minutes=15)
     
     headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    
+    # Expire old pending links for this user
+    _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?user_id=eq.{user_id}&status=eq.pending_link", json={"status": "expired"}, headers=headers)
+    
     data = {
         "user_id": user_id,
         "target_number": "pending",
@@ -96,6 +100,10 @@ async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_
     expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
     
     headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    
+    # Expire old pending OTPs for this user
+    _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?user_id=eq.{user_id}&status=in.(pending_otp,otp_sent)", json={"status": "expired"}, headers=headers)
+    
     data = {
         "code": otp,  # we reuse the code column for OTP
         "user_id": user_id,
