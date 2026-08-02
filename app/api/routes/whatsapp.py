@@ -369,13 +369,8 @@ def _chat_with_student(message: str, sender: str, headers: dict) -> str:
             last_resource = res_resp.json()[0]
             resource_id = last_resource["id"]
             
-            # Fetch subjects for matching
-            subjects = []
-            subj_resp = _session.get(f"{SUPABASE_URL}/rest/v1/subjects", headers=headers)
-            if subj_resp.status_code == 200:
-                subjects = subj_resp.json()
-                
-            subjects_str = json.dumps([{"id": s.get("subject_id"), "name": s.get("subject_name", ""), "code": s.get("subject_code", "")} for s in subjects if s.get("subject_id")])
+            # Use the already fetched user_subjects for matching
+            subjects_str = json.dumps([{"id": s.get("subject_id"), "name": s.get("subject_name", ""), "code": s.get("subject_code", "")} for s in user_subjects if s.get("subject_id")])
 
             prompt = f"""You are ClimbUP's smart WhatsApp Assistant.
 Student: {user_name} (Semester {semester})
