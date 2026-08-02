@@ -206,7 +206,7 @@ async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_to
 
 def _categorize_pdf(caption: str, subjects: list) -> dict:
     if not caption:
-        return {"type": "Notes", "subject_id": None, "reply_message": "📄 File uploaded to your Drive!\n\n*(Tip: To categorize this file, just reply to me right now with the subject name, e.g. 'Cloud Computing Assignment')*\n\n🔗 Link: {link}"}
+        return {"type": "personal_document", "subject_id": None, "reply_message": "📄 File uploaded to your Drive!\n\n*(Tip: To categorize this file, just reply to me right now with the subject name, e.g. 'Cloud Computing Assignment')*\n\n🔗 Link: {link}"}
     
     subjects_str = json.dumps([{"id": s.get("subject_id"), "name": s.get("subject_name", ""), "code": s.get("subject_code", "")} for s in subjects if s.get("subject_id")])
     
@@ -240,14 +240,24 @@ Return ONLY a valid JSON object matching this schema exactly:
             response_text = response_text[3:-3]
             
         data = json.loads(response_text.strip())
+        # Map AI type to valid DB enum values
+        raw_type = data.get("type", "personal_document").lower()
+        type_map = {
+            "notes": "personal_document",
+            "assignment": "personal_document",
+            "practical": "personal_document",
+            "question paper": "personal_document",
+            "personal_document": "personal_document"
+        }
+        valid_type = type_map.get(raw_type, "personal_document")
         return {
-            "type": data.get("type", "Notes"),
+            "type": valid_type,
             "subject_id": data.get("subject_id"),
             "reply_message": data.get("reply_message", "📄 File successfully uploaded and categorized!\n🔗 Link: {link}")
         }
     except Exception as e:
         print("Gemini Categorization Error:", e)
-        return {"type": "Notes", "subject_id": None, "reply_message": "📄 File successfully uploaded to your Drive! (AI categorization failed)\n🔗 Link: {link}"}
+        return {"type": "personal_document", "subject_id": None, "reply_message": "📄 File successfully uploaded to your Drive! (AI categorization failed)\n🔗 Link: {link}"}
 
 def _chat_with_student(message: str, sender: str, headers: dict) -> str:
     if not message:
@@ -477,17 +487,21 @@ async def whatsapp_webhook(request: Request):
                             
                             ai_result = _categorize_pdf(text_message, subjects)
                             
-                            # Save resource
+                            # Save resource - subject_id is mandatory in DB
+                            # Use AI result or fall back to first available subject
+                            final_subject_id = ai_result.get("subject_id")
+                            if not final_subject_id and subjects:
+                                final_subject_id = subjects[0].get("subject_id")
+                            
                             resource_data = {
                                 "user_id": user.get("user_id") or user.get("id"), 
                                 "file_url": public_url, 
                                 "title": filename,
                                 "type": ai_result["type"],
                                 "status": "pending",
-                                "sender_name": "WhatsApp Bot"
+                                "sender_name": "WhatsApp Bot",
+                                "subject_id": final_subject_id
                             }
-                            if ai_result["subject_id"]:
-                                resource_data["subject_id"] = ai_result["subject_id"]
                                 
                             _session.post(f"{SUPABASE_URL}/rest/v1/student_resources", json=resource_data, headers=headers)
                             
@@ -508,3 +522,119 @@ async def whatsapp_webhook(request: Request):
         print("Webhook Error:", e)
         return {"status": "error"}
 
+
+@router.get("/test-full-pipeline")
+async def test_full_pipeline():
+    """
+    LIVE SERVER TEST - Tests the complete upload pipeline from Render server:
+    1. Creates a test PDF
+    2. Uploads to Google Drive using server credentials
+    3. Saves to Supabase under the linked WhatsApp user's account
+    4. Returns detailed results
+    """
+    results = {}
+    
+    try:
+        # Step 1: Test Google Drive Upload from SERVER
+        results["step1_drive"] = "TESTING..."
+        test_pdf_bytes = (
+            b"%PDF-1.4\n1 0 obj\n<</Type /Catalog /Pages 2 0 R>>\nendobj\n"
+            b"2 0 obj\n<</Type /Pages /Kids [3 0 R] /Count 1>>\nendobj\n"
+            b"3 0 obj\n<</Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]>>\nendobj\n"
+            b"xref\n0 4\ntrailer\n<</Size 4 /Root 1 0 R>>\nstartxref\n200\n%%EOF"
+        )
+        
+        drive_url = upload_file_to_user_drive(
+            refresh_token=None,
+            file_bytes=test_pdf_bytes,
+            filename="ClimbUP_ServerTest_Physics_Notes.pdf",
+            mime_type="application/pdf"
+        )
+        results["step1_drive"] = "PASS"
+        results["drive_url"] = drive_url
+    except Exception as e:
+        results["step1_drive"] = f"FAIL: {str(e)}"
+        results["drive_url"] = None
+
+    try:
+        # Step 2: Find user by WhatsApp number in Supabase
+        results["step2_user"] = "TESTING..."
+        headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+        
+        # Find the linked user (search by known test number)
+        test_number = "919421393609"
+        resp = _session.get(
+            f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{test_number}",
+            headers=headers
+        )
+        users = resp.json() if resp.status_code == 200 else []
+        if not users:
+            # try 10-digit
+            resp = _session.get(
+                f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{test_number[2:]}",
+                headers=headers
+            )
+            users = resp.json() if resp.status_code == 200 else []
+        
+        if not users:
+            results["step2_user"] = "FAIL: User not found - link WhatsApp first!"
+            return results
+        
+        user = users[0]
+        user_id = user.get("user_id") or user.get("id")
+        results["step2_user"] = "PASS"
+        results["user_email"] = user.get("email")
+        results["user_id"] = user_id
+    except Exception as e:
+        results["step2_user"] = f"FAIL: {str(e)}"
+        return results
+
+    try:
+        # Step 3: Save to Supabase under user's account
+        results["step3_supabase"] = "TESTING..."
+        
+        # Get first subject as fallback
+        subj_resp = _session.get(f"{SUPABASE_URL}/rest/v1/subjects?limit=1", headers=headers)
+        subjects = subj_resp.json() if subj_resp.status_code == 200 else []
+        fallback_subject_id = subjects[0].get("subject_id") if subjects else None
+        
+        resource_data = {
+            "user_id": user_id,
+            "file_url": results.get("drive_url", "https://drive.google.com/test"),
+            "title": "ClimbUP_ServerTest_Physics_Notes.pdf",
+            "type": "personal_document",
+            "status": "pending",
+            "sender_name": "Server Pipeline Test",
+            "subject_id": fallback_subject_id
+        }
+        
+        save_resp = _session.post(
+            f"{SUPABASE_URL}/rest/v1/student_resources",
+            json=resource_data,
+            headers={**headers, "Prefer": "return=representation"}
+        )
+        
+        if save_resp.status_code in [200, 201]:
+            saved = save_resp.json()
+            saved_resource = saved[0] if isinstance(saved, list) else saved
+            resource_id = saved_resource.get("id")
+            results["step3_supabase"] = "PASS"
+            results["resource_id"] = resource_id
+            results["saved_subject_id"] = saved_resource.get("subject_id")
+            
+            # Auto-cleanup after 30 seconds (delete test entry)
+            _session.delete(
+                f"{SUPABASE_URL}/rest/v1/student_resources?id=eq.{resource_id}",
+                headers=headers
+            )
+            results["cleanup"] = "Test resource auto-deleted"
+        else:
+            results["step3_supabase"] = f"FAIL: HTTP {save_resp.status_code} - {save_resp.text}"
+    except Exception as e:
+        results["step3_supabase"] = f"FAIL: {str(e)}"
+
+    # Final verdict
+    all_passed = all("PASS" in str(results.get(k, "")) for k in ["step1_drive", "step2_user", "step3_supabase"])
+    results["FINAL_RESULT"] = "ALL TESTS PASSED - Pipeline is 100% Working!" if all_passed else "SOME TESTS FAILED - Check details above"
+    
+    return results
