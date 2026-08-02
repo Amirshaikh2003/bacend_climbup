@@ -33,7 +33,8 @@ class OTPRequest(BaseModel):
     whatsapp_number: str
 
 class OTPVerify(BaseModel):
-    otp_code: str
+    otp_code: str = None
+    otp: str = None
 
 import jwt
 
@@ -116,7 +117,11 @@ async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_to
     headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
     
     # Find matching OTP
-    resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{payload.otp_code}&user_id=eq.{user_id}&status=in.(pending_otp,otp_sent)", headers=headers)
+    actual_code = payload.otp_code or payload.otp
+    if not actual_code:
+        raise HTTPException(status_code=400, detail="OTP code missing")
+        
+    resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{actual_code}&user_id=eq.{user_id}&status=in.(pending_otp,otp_sent)", headers=headers)
     
     if resp.status_code == 200 and len(resp.json()) > 0:
         link_data = resp.json()[0]
@@ -137,7 +142,7 @@ async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_to
         
         if update_resp.status_code in (200, 204):
             # Mark OTP as verified
-            _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{payload.otp_code}", json={"status": "verified"}, headers=headers)
+            _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{actual_code}", json={"status": "verified"}, headers=headers)
             return {"success": True, "status": "verified", "message": "WhatsApp number successfully linked!"}
             
     raise HTTPException(status_code=400, detail="Invalid or expired OTP")
