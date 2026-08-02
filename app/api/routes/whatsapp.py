@@ -131,9 +131,21 @@ async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_
         
         meta_resp = requests.post(meta_url, headers=meta_headers, json=meta_payload)
         if meta_resp.status_code not in (200, 201):
-            print(f"Meta API Error: {meta_resp.text}")
-            # We log it but don't fail the request completely so user can still see the DB entry
-            # Usually fails if 24-hour window isn't active without a template.
+            print(f"Meta API Error (text failed): {meta_resp.text}")
+            # Try fallback to standard hello_world template if 24h window is closed
+            template_payload = {
+                "messaging_product": "whatsapp",
+                "to": clean_number,
+                "type": "template",
+                "template": {
+                    "name": "hello_world",
+                    "language": {"code": "en_US"}
+                }
+            }
+            t_resp = requests.post(meta_url, headers=meta_headers, json=template_payload)
+            if t_resp.status_code not in (200, 201):
+                print(f"Meta Template Fallback Error: {t_resp.text}")
+                raise HTTPException(status_code=400, detail=f"Meta WhatsApp Error: {meta_resp.text}")
 
     return {"success": True, "status": "otp_sent", "message": "OTP requested successfully"}
 
