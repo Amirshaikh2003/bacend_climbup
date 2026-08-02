@@ -99,7 +99,7 @@ async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_
             # We log it but don't fail the request completely so user can still see the DB entry
             # Usually fails if 24-hour window isn't active without a template.
 
-    return {"success": True, "message": "OTP requested successfully"}
+    return {"success": True, "status": "otp_sent", "message": "OTP requested successfully"}
 
 @router.post("/verify-otp")
 async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_token)):
