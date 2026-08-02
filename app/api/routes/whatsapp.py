@@ -405,7 +405,15 @@ async def whatsapp_webhook(request: Request):
                             user_id = link_data["user_id"]
                             _session.patch(f"{SUPABASE_URL}/rest/v1/users?user_id=eq.{user_id}", json={"whatsapp_number": sender}, headers=headers)
                             _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{code}", json={"status": "verified", "target_number": sender}, headers=headers)
-                            _send_meta_message(sender, "✅ WhatsApp Account successfully linked to ClimbUP! You can now send PDFs or chat with the AI.")
+                            
+                            welcome_message = (
+                                "🎉 *Woohoo! Welcome to ClimbUP!* 🚀\n\n"
+                                "Aapka account successfully link ho gaya hai! \n\n"
+                                "Ab aap seedha yahin se apne PDFs aur Notes upload kar sakte hain. "
+                                "Sath hi, hamara AI Assistant aapke saare sawalon ke smart jawab dega! 🤖✨\n\n"
+                                "👉 *Try it out:* Bas koi bhi PDF bhejiye ya seedha mujhse koi sawaal puchiye!"
+                            )
+                            _send_meta_message(sender, welcome_message)
                     else:
                         _send_meta_message(sender, "❌ Invalid linking code.")
                     continue
