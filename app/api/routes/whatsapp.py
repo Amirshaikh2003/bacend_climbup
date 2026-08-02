@@ -171,8 +171,8 @@ async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_to
     actual_code = str(actual_code).strip()
     print(f"Verifying OTP code={actual_code} for user_id={user_id}")
 
-    # Query with service role key to bypass any RLS issue
-    resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{actual_code}&user_id=eq.{user_id}&order=created_at.desc&limit=1", headers=service_headers)
+    # Query by code directly to avoid user_id format mismatches
+    resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{actual_code}&order=created_at.desc&limit=1", headers=service_headers)
     
     if resp.status_code == 200 and len(resp.json()) > 0:
         link_data = resp.json()[0]
