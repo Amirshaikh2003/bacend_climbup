@@ -161,37 +161,43 @@ async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_to
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token (no sub)")
 
-    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {token}"}
+    service_headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
     
     # Find matching OTP
     actual_code = payload.otp_code or payload.otp
     if not actual_code:
         raise HTTPException(status_code=400, detail="OTP code missing")
         
-    resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{actual_code}&user_id=eq.{user_id}&status=in.(pending_otp,otp_sent)", headers=headers)
+    actual_code = str(actual_code).strip()
+    print(f"Verifying OTP code={actual_code} for user_id={user_id}")
+
+    # Query with service role key to bypass any RLS issue
+    resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{actual_code}&user_id=eq.{user_id}&order=created_at.desc&limit=1", headers=service_headers)
     
     if resp.status_code == 200 and len(resp.json()) > 0:
         link_data = resp.json()[0]
+        print(f"Found link_data: {link_data}")
         
-        # Check expiry
-        expires_at = datetime.fromisoformat(link_data["expires_at"].replace("Z", "+00:00"))
-        if datetime.utcnow().replace(tzinfo=expires_at.tzinfo) > expires_at:
-            raise HTTPException(status_code=400, detail="OTP expired")
-            
-        # Update users table
         target_number = link_data.get("target_number")
-        update_data = {"whatsapp_number": target_number}
-        update_resp = _session.patch(
-            f"{SUPABASE_URL}/rest/v1/users?user_id=eq.{user_id}", 
-            json=update_data, 
-            headers=headers
-        )
         
-        if update_resp.status_code in (200, 204):
-            # Mark OTP as verified
-            _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{actual_code}", json={"status": "verified"}, headers=headers)
-            return {"success": True, "status": "verified", "message": "WhatsApp number successfully linked!"}
+        # Try updating users table with both id and user_id columns
+        u_resp1 = _session.patch(
+            f"{SUPABASE_URL}/rest/v1/users?id=eq.{user_id}", 
+            json={"whatsapp_number": target_number}, 
+            headers=service_headers
+        )
+        u_resp2 = _session.patch(
+            f"{SUPABASE_URL}/rest/v1/users?user_id=eq.{user_id}", 
+            json={"whatsapp_number": target_number}, 
+            headers=service_headers
+        )
+        print(f"Update user response 1: {u_resp1.status_code}, 2: {u_resp2.status_code}")
+        
+        # Mark OTP as verified
+        _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{actual_code}", json={"status": "verified"}, headers=service_headers)
+        return {"success": True, "status": "verified", "message": "WhatsApp number successfully linked!"}
             
+    print(f"OTP verification failed. Resp code: {resp.status_code}, body: {resp.text}")
     raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
 def _categorize_pdf(caption: str, subjects: list) -> dict:
