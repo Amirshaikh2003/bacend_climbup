@@ -331,7 +331,17 @@ def _chat_with_student(message: str, sender: str, headers: dict) -> str:
     # 1. Lookup user
     user_resp = _session.get(f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{sender}", headers=headers)
     if user_resp.status_code == 200 and len(user_resp.json()) > 0:
-        user_id = user_resp.json()[0].get("user_id") or user_resp.json()[0].get("id")
+        user = user_resp.json()[0]
+        user_id = user.get("user_id") or user.get("id")
+        user_name = (user.get("full_name") or "Student").split()[0]
+        semester = user.get("semester", "?")
+        
+        # Fetch user's specific semester subjects for error messages
+        user_subjects = _get_user_subjects(user, headers)
+        subject_names_list = "\n".join(
+            f"  \u2022 {s.get('subject_name')} ({s.get('subject_code')})"
+            for s in user_subjects
+        )
         
         # 2. Find their OLDEST uncategorized WhatsApp Bot file (subject_id is NULL)
         # This ensures delayed replies (e.g. 10am upload, 4pm reply) always hit the RIGHT file
