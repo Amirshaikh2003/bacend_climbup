@@ -333,8 +333,28 @@ def _chat_with_student(message: str, sender: str, headers: dict) -> str:
     if user_resp.status_code == 200 and len(user_resp.json()) > 0:
         user_id = user_resp.json()[0].get("user_id") or user_resp.json()[0].get("id")
         
-        # 2. Find their most recent resource
-        res_resp = _session.get(f"{SUPABASE_URL}/rest/v1/student_resources?user_id=eq.{user_id}&order=created_at.desc&limit=1", headers=headers)
+        # 2. Find their OLDEST uncategorized WhatsApp Bot file (subject_id is NULL)
+        # This ensures delayed replies (e.g. 10am upload, 4pm reply) always hit the RIGHT file
+        res_resp = _session.get(
+            f"{SUPABASE_URL}/rest/v1/student_resources"
+            f"?user_id=eq.{user_id}"
+            f"&sender_name=eq.WhatsApp Bot"
+            f"&subject_id=is.null"          # only uncategorized files
+            f"&order=created_at.asc"         # oldest first (FIFO - first uploaded = first categorized)
+            f"&limit=1",
+            headers=headers
+        )
+
+        # Fallback: if no uncategorized file, get most recent (user may want to re-categorize)
+        if not (res_resp.status_code == 200 and res_resp.json()):
+            res_resp = _session.get(
+                f"{SUPABASE_URL}/rest/v1/student_resources"
+                f"?user_id=eq.{user_id}"
+                f"&sender_name=eq.WhatsApp Bot"
+                f"&order=created_at.desc&limit=1",
+                headers=headers
+            )
+
         if res_resp.status_code == 200 and len(res_resp.json()) > 0:
             last_resource = res_resp.json()[0]
             resource_id = last_resource["id"]
@@ -597,12 +617,12 @@ async def whatsapp_webhook(request: Request):
                                 )
                                 _send_meta_message(sender, msg)
                                 return {"status": "ok"}
-                            
-                            # Save resource under correct user + subject
-                            final_subject_id = ai_result.get("subject_id")
-                            if not final_subject_id and user_subjects:
-                                final_subject_id = user_subjects[0].get("subject_id")
-                            
+
+                            # Save resource
+                            # If AI matched a subject → save with subject_id
+                            # If no match/no caption → save with subject_id=NULL (pending categorization)
+                            final_subject_id = ai_result.get("subject_id")  # May be None = uncategorized
+
                             resource_data = {
                                 "user_id": user.get("user_id") or user.get("id"),
                                 "file_url": public_url,
@@ -610,17 +630,34 @@ async def whatsapp_webhook(request: Request):
                                 "type": ai_result["type"],
                                 "status": "pending",
                                 "sender_name": "WhatsApp Bot",
-                                "subject_id": final_subject_id
+                                "subject_id": final_subject_id  # NULL = needs categorization later
                             }
-                            
+
                             _session.post(f"{SUPABASE_URL}/rest/v1/student_resources", json=resource_data, headers=headers)
-                            
-                            # Send reply WITHOUT drive link - security!
-                            reply = ai_result["reply_message"]
-                            # Strip any accidental link references
-                            reply = reply.replace("{link}", "").replace(public_url, "").strip()
+
+                            user_name = (user.get("full_name") or "Student").split()[0]
+                            semester = user.get("semester", "?")
+
+                            if final_subject_id:
+                                # Subject was matched from caption - send confirmation
+                                reply = ai_result["reply_message"]
+                                reply = reply.replace("{link}", "").replace(public_url, "").strip()
+                            else:
+                                # No subject given - ask user to reply with subject name
+                                user_subjects = _get_user_subjects(user, headers)
+                                subject_names_list = "\n".join(
+                                    f"  \u2022 {s.get('subject_name')} ({s.get('subject_code')})"
+                                    for s in user_subjects
+                                )
+                                reply = (
+                                    f"\U0001f4c4 File securely save ho gayi, {user_name}!\n\n"
+                                    f"\U0001f4da Ye file kis subject ki hai? Reply karo:\n{subject_names_list}\n\n"
+                                    f"\U0001f4cc Aap baad mein bhi reply kar sakte ho - file safe rahegi! \U0001f512"
+                                )
+
                             _send_meta_message(sender, reply)
                             return {"status": "ok"}
+
                 
                 # Normal Chat
                 if text_message:
