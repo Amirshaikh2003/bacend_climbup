@@ -53,11 +53,7 @@ async def generate_whatsapp_link(token: str = Depends(verify_token)):
     code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
     expires_at = datetime.utcnow() + timedelta(minutes=15)
     
-    # Use the user's token so Supabase RLS policies work correctly
-    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {token}"}
-    
-    # Expire old pending links for this user
-    _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?user_id=eq.{user_id}&status=eq.pending_link", json={"status": "expired"}, headers=headers)
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
     
     data = {
         "user_id": user_id,
@@ -100,11 +96,7 @@ async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_
     otp = "".join(random.choices(string.digits, k=4))
     expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
     
-    # Use the user's token so Supabase RLS policies work correctly
-    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {token}"}
-    
-    # Expire old pending OTPs for this user
-    _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?user_id=eq.{user_id}&status=in.(pending_otp,otp_sent)", json={"status": "expired"}, headers=headers)
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
     
     data = {
         "code": otp,  # we reuse the code column for OTP
@@ -157,7 +149,7 @@ async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_to
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid token (no sub)")
 
-    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {token}"}
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
     
     # Find matching OTP
     actual_code = payload.otp_code or payload.otp
