@@ -38,6 +38,39 @@ class OTPVerify(BaseModel):
 
 import jwt
 
+@router.post("/generate-link")
+async def generate_whatsapp_link(token: str = Depends(verify_token)):
+    """Generates a unique code and returns the wa.me link for direct linking."""
+    try:
+        decoded = jwt.decode(token, options={"verify_signature": False})
+        user_id = decoded.get("sub")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token format")
+        
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid token (no sub)")
+
+    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    expires_at = datetime.utcnow() + timedelta(minutes=15)
+    
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+    data = {
+        "user_id": user_id,
+        "target_number": "pending",
+        "code": code,
+        "status": "pending_link",
+        "expires_at": expires_at.isoformat()
+    }
+    
+    resp = _session.post(f"{SUPABASE_URL}/rest/v1/whatsapp_links", json=data, headers=headers)
+    if resp.status_code not in (200, 201):
+        raise HTTPException(status_code=500, detail="Failed to save link code")
+        
+    bot_number = "15556604761"
+    wa_link = f"https://wa.me/{bot_number}?text=Link_Account_{code}"
+    
+    return {"success": True, "link": wa_link, "code": code}
+
 @router.post("/request-otp")
 async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_token)):
     """Generates a 4-digit OTP for WhatsApp Linking and saves it to DB for the Node.js bot to send."""
@@ -356,6 +389,26 @@ async def whatsapp_webhook(request: Request):
                         filename = f"image_{media_id}.jpg"
                     
                     text_message = media_obj.get("caption", "")
+                
+                if text_message.strip().startswith("Link_Account_"):
+                    code = text_message.strip().split("Link_Account_")[1].strip()
+                    # Lookup code
+                    link_resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{code}&status=eq.pending_link", headers=headers)
+                    if link_resp.status_code == 200 and len(link_resp.json()) > 0:
+                        link_data = link_resp.json()[0]
+                        # Check expiry
+                        expires_at = datetime.fromisoformat(link_data["expires_at"].replace("Z", "+00:00"))
+                        if datetime.utcnow().replace(tzinfo=expires_at.tzinfo) > expires_at:
+                            _send_meta_message(sender, "❌ This link code has expired. Please generate a new one from the website.")
+                        else:
+                            # Update user
+                            user_id = link_data["user_id"]
+                            _session.patch(f"{SUPABASE_URL}/rest/v1/users?user_id=eq.{user_id}", json={"whatsapp_number": sender}, headers=headers)
+                            _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{code}", json={"status": "verified", "target_number": sender}, headers=headers)
+                            _send_meta_message(sender, "✅ WhatsApp Account successfully linked to ClimbUP! You can now send PDFs or chat with the AI.")
+                    else:
+                        _send_meta_message(sender, "❌ Invalid linking code.")
+                    continue
                 
                 if has_media and media_id and user:
                     # Download media from Meta
