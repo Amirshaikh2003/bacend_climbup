@@ -105,6 +105,12 @@ def download_file_from_drive(refresh_token: str, file_id: str) -> bytes:
     """
     service = get_drive_service_for_user(refresh_token)
     
+    # Check file size first to prevent Render OOM (max 15MB)
+    file_metadata = service.files().get(fileId=file_id, fields="size").execute()
+    file_size_bytes = int(file_metadata.get('size', 0))
+    if file_size_bytes > 15 * 1024 * 1024:
+        raise Exception(f"File is too large ({file_size_bytes / (1024*1024):.1f} MB) to download directly to WhatsApp.")
+
     # Download file content
     request = service.files().get_media(fileId=file_id)
     fh = io.BytesIO()
