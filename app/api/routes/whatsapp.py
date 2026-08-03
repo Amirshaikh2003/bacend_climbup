@@ -645,15 +645,35 @@ def process_webhook_payload(body: dict):
                 if msg_type == "text":
                     text_message = message_obj.get("text", {}).get("body", "")
                 
-                elif msg_type in ["image", "document"]:
+                elif msg_type == "image":
+                    message_id = message_obj.get("id")
+                    _send_meta_reaction(sender, message_id, "❌")
+                    
+                    import time
+                    global _recent_image_spam_cache
+                    if "_recent_image_spam_cache" not in globals():
+                        _recent_image_spam_cache = {}
+                        
+                    current_time = time.time()
+                    last_sent = _recent_image_spam_cache.get(sender, 0)
+                    if current_time - last_sent > 30: # 30 second rate limit
+                        _recent_image_spam_cache[sender] = current_time
+                        msg = (
+                            "❌ *Images not supported!*\n\n"
+                            "Hi! We don't process loose images because it gets too messy to organize. 📝\n"
+                            "Please convert your notes/photos into a **Single PDF** with a valid title (e.g. 'Cloud_Computing_Unit1.pdf') and send it here.\n\n"
+                            "Use apps like *Adobe Scan* or *CamScanner* to make a PDF easily! ✨"
+                        )
+                        _send_meta_message(sender, msg)
+                    
+                    return {"status": "ok"}
+                    
+                elif msg_type == "document":
                     has_media = True
                     media_obj = message_obj.get(msg_type, {})
                     media_id = media_obj.get("id")
                     mime_type = media_obj.get("mime_type")
                     filename = media_obj.get("filename", f"upload_{media_id}")
-                    if msg_type == "image":
-                        filename = f"image_{media_id}.jpg"
-                    
                     text_message = media_obj.get("caption", "")
                 
                 if text_message.strip().startswith("Link_Account_"):
