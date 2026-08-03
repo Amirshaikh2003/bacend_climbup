@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, BackgroundTasks
 import random
 import string
 import os
@@ -501,7 +501,6 @@ def _send_meta_message(to_number: str, text: str):
         "text": {"preview_url": False, "body": text}
     }
     requests.post(url, headers=headers, json=payload)
-    requests.post(url, headers=headers, json=payload)
 
 def _upload_media_to_meta(file_bytes: bytes, mime_type: str, filename: str) -> str:
     """Uploads file bytes to Meta API and returns media_id."""
@@ -565,9 +564,15 @@ async def verify_whatsapp_webhook(request: Request):
     raise HTTPException(status_code=400, detail="Missing parameters")
 
 @router.post("/webhook")
-async def whatsapp_webhook(request: Request):
+async def whatsapp_webhook(request: Request, background_tasks: BackgroundTasks):
     """Receives incoming messages from Meta WhatsApp API"""
     body = await request.json()
+    # Process the heavy stuff (LLM, DB, Drive) in the background so we return 200 OK immediately
+    background_tasks.add_task(process_webhook_payload, body)
+    return {"status": "ok"}
+
+def process_webhook_payload(body: dict):
+    """Background task to handle the actual webhook payload"""
     print("WEBHOOK RECEIVED FROM META:", json.dumps(body))
     
     if body.get("object") != "whatsapp_business_account":
