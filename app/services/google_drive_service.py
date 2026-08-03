@@ -2,7 +2,7 @@ import os
 import io
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
+from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
 # Define the scopes for Google Drive API
 SCOPES = ['https://www.googleapis.com/auth/drive.file']
@@ -98,3 +98,19 @@ def upload_file_to_user_drive(refresh_token: str, file_bytes: bytes, filename: s
     
     return file.get('webViewLink')
 
+def download_file_from_drive(refresh_token: str, file_id: str) -> bytes:
+    """
+    Downloads a file from the user's personal Google Drive into memory.
+    Returns the raw bytes of the file.
+    """
+    service = get_drive_service_for_user(refresh_token)
+    
+    # Download file content
+    request = service.files().get_media(fileId=file_id)
+    fh = io.BytesIO()
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while done is False:
+        status, done = downloader.next_chunk()
+        
+    return fh.getvalue()
