@@ -70,7 +70,7 @@ async def generate_whatsapp_link(token: str = Depends(verify_token)):
     if resp.status_code not in (200, 201):
         raise HTTPException(status_code=500, detail="Failed to save link code")
         
-    bot_number = "15556604761"
+    bot_number = "919421393609"
     wa_link = f"https://wa.me/{bot_number}?text=Link_Account_{code}"
     
     return {"success": True, "link": wa_link, "code": code}
