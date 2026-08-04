@@ -281,6 +281,34 @@ def fix_pdf_math_with_vision(
     return _gemini_request(contents, system_instruction, max_tokens, temperature, response_mime_type="application/json")
 
 
+def categorize_pdf_with_vision(
+    image_bytes: bytes,
+    prompt_text: str,
+    max_tokens: int = 200,
+    temperature: float = 0.6,
+) -> str:
+    """
+    Sends a raw image of a PDF page to Gemini to categorize the subject and file type.
+    Used as a fallback for scanned (image-based) PDFs.
+    """
+    b64_img = base64.b64encode(image_bytes).decode("utf-8")
+    
+    contents = [{
+        "role": "user",
+        "parts": [
+            {"text": prompt_text},
+            {
+                "inlineData": {
+                    "mimeType": "image/png",
+                    "data": b64_img
+                }
+            }
+        ]
+    }]
+    
+    return _gemini_request(contents, None, max_tokens, temperature)
+
+
 def extract_page_questions_agentic(
     image_bytes: bytes,
     max_tokens: int = 8192,
