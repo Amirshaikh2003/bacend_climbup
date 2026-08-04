@@ -714,33 +714,6 @@ def process_webhook_payload(body: dict):
                     continue
                 
                 if has_media and media_id and user:
-                    # Rate Limiting: Max 30 files per day
-                    user_id = user.get("user_id") or user.get("id")
-                    one_day_ago = (datetime.utcnow() - timedelta(days=1)).isoformat()
-                    
-                    count_resp = _session.get(
-                        f"{SUPABASE_URL}/rest/v1/student_resources?user_id=eq.{user_id}&created_at=gte.{one_day_ago}&limit=30",
-                        headers=headers
-                    )
-                    
-                    if count_resp.status_code == 200 and len(count_resp.json()) >= 30:
-                        msg_id = message_obj.get("id")
-                        _send_meta_reaction(sender, msg_id, "❌")
-                        
-                        # Use the same rate limiter for the text message so we don't spam them if they try to upload a bulk of 10 while over limit
-                        import time
-                        global _recent_image_spam_cache
-                        if "_recent_image_spam_cache" not in globals():
-                            _recent_image_spam_cache = {}
-                        current_time = time.time()
-                        last_sent = _recent_image_spam_cache.get(sender + "_limit", 0)
-                        if current_time - last_sent > 30:
-                            _recent_image_spam_cache[sender + "_limit"] = current_time
-                            _send_meta_message(sender, "⚠️ *Daily Limit Reached!*\n\nYou can only upload up to 30 PDFs per day. Please try again tomorrow! ⏳")
-                        
-                        return {"status": "ok"}
-
-                    # Download media from Meta
                     meta_url = f"https://graph.facebook.com/v17.0/{media_id}"
                     meta_headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
                     
@@ -778,17 +751,23 @@ def process_webhook_payload(body: dict):
                                 "message_id": message_id
                             }
                             
-                            _session.post(f"{SUPABASE_URL}/rest/v1/student_resources", json=resource_data, headers=headers)
+                            post_resp = _session.post(f"{SUPABASE_URL}/rest/v1/student_resources", json=resource_data, headers=headers)
                             
-                            if final_subject_id:
-                                # Success - Guessed the subject!
-                                if message_id:
-                                    _send_meta_reaction(sender, message_id, "✅")
+                            if post_resp.status_code in [200, 201]:
+                                if final_subject_id:
+                                    # Success - Guessed the subject!
+                                    if message_id:
+                                        _send_meta_reaction(sender, message_id, "✅")
+                                else:
+                                    # Failed to guess subject - Needs manual categorization
+                                    if message_id:
+                                        _send_meta_reaction(sender, message_id, "❓")
                             else:
-                                # Failed to guess subject - Needs manual categorization
+                                # DB INSERT FAILED
+                                print("SUPABASE INSERT ERROR:", post_resp.text)
                                 if message_id:
-                                    _send_meta_reaction(sender, message_id, "❓")
-                                # Zero-spam policy: No instruction text message here.
+                                    _send_meta_reaction(sender, message_id, "❌")
+                                _send_meta_message(sender, f"❌ System Error! The file could not be saved to your dashboard. Error: {post_resp.text[:100]}")
 
                             return {"status": "ok"}
 
