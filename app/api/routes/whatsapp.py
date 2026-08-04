@@ -137,17 +137,19 @@ async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_to
     raise HTTPException(status_code=400, detail="Invalid or expired OTP")
 
 def _get_user_subjects(user: dict, headers: dict) -> list:
-    """Fetch subjects specific to this user's semester, branch, and university."""
+    """Fetch subjects specific to this user's semester, branch, and university, including MDM & OE."""
     university_id = user.get("university_id")
     branch_id = user.get("branch_id")
     semester = user.get("semester")
+    mdm_branch_id = user.get("mdm_branch_id")
+    oe_id = user.get("oe_id")
     
     if not all([university_id, branch_id, semester]):
         # Fallback: return all subjects if profile incomplete
         resp = _session.get(f"{SUPABASE_URL}/rest/v1/subjects", headers=headers)
         return resp.json() if resp.status_code == 200 else []
     
-    # Fetch ONLY this student's semester + branch subjects
+    # Fetch ONLY this student's semester + branch core subjects
     resp = _session.get(
         f"{SUPABASE_URL}/rest/v1/subjects"
         f"?semester=eq.{semester}"
@@ -164,6 +166,33 @@ def _get_user_subjects(user: dict, headers: dict) -> list:
             headers=headers
         )
         subjects = resp.json() if resp.status_code == 200 else []
+        
+    # Append MDM Subjects if enrolled
+    if mdm_branch_id:
+        mdm_resp = _session.get(
+            f"{SUPABASE_URL}/rest/v1/mdm_branch_subject_mapping?branch_id=eq.{mdm_branch_id}&semester=eq.{semester}&select=mdm_subjects(mdm_subject_id,subject_name,subject_code)&limit=1",
+            headers=headers
+        )
+        if mdm_resp.status_code == 200 and len(mdm_resp.json()) > 0:
+            mdm_data = mdm_resp.json()[0].get("mdm_subjects", {})
+            if mdm_data:
+                # Normalize key from mdm_subject_id to subject_id so AI can use it smoothly
+                subjects.append({
+                    "subject_id": mdm_data.get("mdm_subject_id"),
+                    "subject_name": mdm_data.get("subject_name"),
+                    "subject_code": mdm_data.get("subject_code")
+                })
+                
+    # Append OE Subjects if enrolled
+    if oe_id:
+        oe_resp = _session.get(
+            f"{SUPABASE_URL}/rest/v1/open_elective_baskets?oe_id=eq.{oe_id}&select=subjects(subject_id,subject_name,subject_code)&limit=1",
+            headers=headers
+        )
+        if oe_resp.status_code == 200 and len(oe_resp.json()) > 0:
+            oe_data = oe_resp.json()[0].get("subjects", {})
+            if oe_data:
+                subjects.append(oe_data)
     
     return subjects
 
