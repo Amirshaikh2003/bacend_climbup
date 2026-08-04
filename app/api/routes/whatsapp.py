@@ -92,9 +92,22 @@ async def request_whatsapp_otp(payload: OTPRequest, token: str = Depends(verify_
     if not clean_number:
         raise HTTPException(status_code=400, detail="Invalid WhatsApp Number")
         
+    # Security formatting: Strip leading '0' if user inputs '09876543210'
+    if clean_number.startswith("0") and len(clean_number) == 11:
+        clean_number = clean_number[1:]
+        
     # If it's a 10-digit Indian number without country code, automatically add '91'
     if len(clean_number) == 10:
         clean_number = f"91{clean_number}"
+
+    headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {token}"}
+    
+    # Anti-Spam Check: Don't allow OTP requests if one was generated < 60 seconds ago for this user or number
+    # We check if there's an unexpired link generated recently (expires_at > now + 4 mins, since validity is 5 mins)
+    recent_threshold = (datetime.utcnow() + timedelta(minutes=4)).isoformat()
+    spam_resp = _session.get(f"{SUPABASE_URL}/rest/v1/whatsapp_links?or=(user_id.eq.{user_id},target_number.eq.{clean_number})&expires_at=gte.{recent_threshold}&limit=1", headers=headers)
+    if spam_resp.status_code == 200 and len(spam_resp.json()) > 0:
+        raise HTTPException(status_code=429, detail="Please wait 1 minute before requesting another OTP.")
 
     otp = "".join(random.choices(string.digits, k=4))
     expires_at = (datetime.utcnow() + timedelta(minutes=5)).isoformat()
@@ -183,6 +196,13 @@ async def verify_whatsapp_otp(payload: OTPVerify, token: str = Depends(verify_to
         print(f"Found link_data: {link_data}")
         
         target_number = link_data.get("target_number")
+        
+        # SECURITY FIX: Unlink this number from ANY previous account to prevent hijacking
+        _session.patch(
+            f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{target_number}",
+            json={"whatsapp_number": None},
+            headers=service_headers
+        )
         
         # Try updating users table with both id and user_id columns
         u_resp1 = _session.patch(
@@ -661,6 +681,10 @@ def process_webhook_payload(body: dict):
                         else:
                             # Update user
                             user_id = link_data["user_id"]
+                            
+                            # SECURITY FIX: Unlink this number from any previous account to prevent hijacking
+                            _session.patch(f"{SUPABASE_URL}/rest/v1/users?whatsapp_number=eq.{sender}", json={"whatsapp_number": None}, headers=headers)
+                            
                             _session.patch(f"{SUPABASE_URL}/rest/v1/users?user_id=eq.{user_id}", json={"whatsapp_number": sender}, headers=headers)
                             _session.patch(f"{SUPABASE_URL}/rest/v1/whatsapp_links?code=eq.{code}", json={"status": "verified", "target_number": sender}, headers=headers)
                             
