@@ -28,6 +28,7 @@ allowed_origins = [
     "http://127.0.0.1:5173",
     "https://www.myclimbup.xyz",
     "https://myclimbup.xyz",
+    "https://admin-frontend-lilac-xi.vercel.app",
 ]
 
 
