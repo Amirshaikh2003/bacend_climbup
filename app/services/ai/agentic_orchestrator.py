@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import Any, Dict, List
 
 from app.services.ai.gemini_client import chat_completion
@@ -7,6 +8,14 @@ from app.services.ai.Diagram_fetcher import get_image_link_from_serpapi
 from app.services.ai.answer_generator import generate_mermaid_for_image
 
 logger = logging.getLogger(__name__)
+
+def _extract_json(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```json"): text = text[7:-3]
+    elif text.startswith("```"): text = text[3:-3]
+    match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
+    return match.group(1) if match else text
+
 
 # -----------------------------------------------------------------------------
 # Agent 1: The Classifier
@@ -43,14 +52,14 @@ def run_classifier_agent(question: str, user_context: str) -> dict:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=150,
+            max_tokens=2000,
             temperature=0.1,
             response_mime_type="application/json",
             response_schema=schema
         )
-        return json.loads(res.strip())
+        return json.loads(_extract_json(res))
     except Exception as e:
-        logger.error(f"Classifier Agent failed: {e}")
+        logger.error(f"Classifier Agent failed: {e}\nRaw res: {locals().get('res', 'None')}")
         return {"domain": "General Engineering", "intent": "Conceptual", "requires_diagram": False, "diagram_type_needed": "internet_search"}
 
 # -----------------------------------------------------------------------------
@@ -93,14 +102,14 @@ def run_planner_agent(question: str, classification: dict) -> list:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=500,
+            max_tokens=4000,
             temperature=0.2,
             response_mime_type="application/json",
             response_schema=schema
         )
-        return json.loads(res.strip())
+        return json.loads(_extract_json(res))
     except Exception as e:
-        logger.error(f"Planner Agent failed: {e}")
+        logger.error(f"Planner Agent failed: {e}\nRaw res: {locals().get('res', 'None')}")
         return [{"section_name": "Answer", "content_type": "markdown", "description": "Write a detailed answer."}]
 
 # -----------------------------------------------------------------------------
@@ -127,18 +136,12 @@ def run_generator_agent(question: str, rubric: list) -> list:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=4000,
+            max_tokens=8192,
             temperature=0.4
         )
-        
-        # Cleanup markdown formatting if present
-        res = res.strip()
-        if res.startswith("```json"): res = res[7:-3]
-        elif res.startswith("```"): res = res[3:-3]
-        
-        return json.loads(res.strip())
+        return json.loads(_extract_json(res))
     except Exception as e:
-        logger.error(f"Generator Agent failed: {e}")
+        logger.error(f"Generator Agent failed: {e}\nRaw res: {locals().get('res', 'None')}")
         return [{"type": "markdown", "content": f"**Error generating advanced answer.**\nPlease try again."}]
 
 # -----------------------------------------------------------------------------
