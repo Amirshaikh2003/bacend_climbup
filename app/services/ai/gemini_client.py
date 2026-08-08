@@ -226,13 +226,21 @@ def chat_completion(
     max_tokens: int = 8192,
     temperature: float = 0.25,
     response_mime_type: Optional[str] = None,
+    response_schema: Optional[dict] = None,
 ) -> str:
     """
     Drop-in replacement for openrouter_client.chat_completion.
     Used by question_analyzer and answer_generator unchanged.
     """
     contents, system_instruction = _build_contents(messages)
-    return _gemini_request(contents, system_instruction, max_tokens, temperature, response_mime_type=response_mime_type)
+    return _gemini_request(
+        contents, 
+        system_instruction, 
+        max_tokens, 
+        temperature, 
+        response_mime_type=response_mime_type,
+        response_schema=response_schema
+    )
 
 
 def chat_completion_with_images(
