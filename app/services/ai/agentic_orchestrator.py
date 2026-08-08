@@ -92,11 +92,12 @@ def run_planner_agent(question: str, classification: dict) -> list:
         "Design a HIGHLY ACCURATE and STRUCTURED answer to get maximum university marks. "
         "Break down the topic into 4 to 6 concise sections. "
         "CRITICAL RULE: YOU MUST AGGRESSIVELY PRIORITIZE DIAGRAMS! If the topic can even slightly benefit from a visual representation (e.g., a Recursion Tree for recurrences, block diagrams, flowcharts, architecture maps, free-body diagrams), you MUST explicitly include a 'mermaid' or 'image' block section. NEVER skip diagrams for complex topics.\n\n"
-        "For Numerical: Given Data -> Formulas -> Step-by-step Calculation -> Result.\n"
-        "For Derivations: Assumptions -> Diagram (image/mermaid) -> Step-by-step Mathematical Steps -> Final Formula.\n"
-        "For Math/Algorithms/Recurrence: Concept -> Recursion Tree / Flowchart Diagram (mermaid) -> Step-by-step Solution -> Final Complexity Analysis.\n"
-        "For TOC/Logic: Concept -> Transition Table -> State Diagram (mermaid) -> Test Strings.\n"
-        "For Differences: Detailed Intro -> Table (Mandatory) -> Conclusion.\n"
+        "STRUCTURE MANDATE: Every answer MUST start with a strong 'Introduction / Definition' section and end with a solid 'Conclusion / Real-World Application' section.\n"
+        "For Numerical: Introduction -> Given Data -> Formulas -> Step-by-step Calculation -> Result & Conclusion.\n"
+        "For Derivations: Introduction -> Assumptions -> Diagram (image/mermaid) -> Step-by-step Mathematical Steps -> Final Formula & Conclusion.\n"
+        "For Math/Algorithms/Recurrence: Introduction -> Concept -> Recursion Tree / Flowchart Diagram (mermaid) -> Step-by-step Solution -> Final Complexity Analysis & Conclusion.\n"
+        "For TOC/Logic: Introduction -> Concept -> Transition Table -> State Diagram (mermaid) -> Test Strings -> Conclusion.\n"
+        "For Differences: Detailed Introduction -> Table (Mandatory) -> Conclusion.\n"
         "Output the array of sections."
     )
     
