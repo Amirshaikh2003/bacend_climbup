@@ -19,8 +19,8 @@ def _extract_json(text: str) -> str:
         return text
         
     json_str = match.group(1)
-    # Fix invalid LaTeX escapes (e.g. \gamma -> \\gamma) for JSON parsing
-    json_str = re.sub(r'\\(?![ntrbf\\"/])', r'\\\\', json_str)
+    # Fix invalid LaTeX escapes (e.g. \gamma -> \\gamma) without corrupting already double-escaped \\gamma
+    json_str = re.sub(r'(?<!\\)\\(?![ntrbf\\"/])', r'\\\\', json_str)
     
     return json_str
 
@@ -179,8 +179,9 @@ def run_section_generator_agent(question: str, section: dict, full_rubric: list,
                     
         return blocks
     except Exception as e:
-        logger.error(f"Section Generator Agent failed: {e}\nRaw res: {locals().get('res', 'None')}")
-        return [{"type": "markdown", "content": f"*(Content generation failed for this section)*"}]
+        raw_output = locals().get('res', 'No output generated')
+        logger.error(f"Section Generator Agent failed: {e}\nRaw res: {raw_output}")
+        return [{"type": "markdown", "content": f"⚠️ **Format Error:** The AI generated the answer but failed to format it correctly. Here is the raw text:\n\n{raw_output}"}]
 
 # -----------------------------------------------------------------------------
 # Agent 4: The Art Director (Visual Enrichment)
