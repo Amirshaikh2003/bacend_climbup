@@ -225,7 +225,7 @@ def generate_agentic_answer(question: str, user_context: str = "") -> dict:
     
     # We maintain order by submitting futures and storing their index
     future_to_index = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         for idx, section in enumerate(rubric):
             future = executor.submit(run_section_generator_agent, question, section, rubric)
             future_to_index[future] = idx

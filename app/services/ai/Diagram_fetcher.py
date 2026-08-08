@@ -43,7 +43,8 @@ def _fetch_candidate_image_urls(search_query: str) -> List[str]:
         blocked_keywords = [
             "pinterest", "amazon", "flipkart", "shutterstock", "istockphoto", "gettyimages", 
             "freepik", "alamy", "123rf", "dreamstime", "facebook", "instagram", "twitter", 
-            "tiktok", "news", "stock", "vector", "pngtree", "vecteezy", "ebay", "etsy"
+            "tiktok", "news", "stock", "vector", "pngtree", "vecteezy", "ebay", "etsy",
+            "researchgate", "springer", "sciencedirect", "ieee", "mdpi", "tandfonline"
         ]
         
         valid_urls = []
@@ -116,7 +117,11 @@ def get_image_link_from_serpapi(image_block: Dict[str, Any]) -> Optional[str]:
     if not isinstance(image_block, dict) or image_block.get("type") != "image":
         return None
 
-    query = str(image_block.get("search_query") or image_block.get("title") or "").strip()
+    query = str(image_block.get("query") or image_block.get("search_query") or image_block.get("title") or "").strip()
+    
+    # If the query is extremely long (e.g. a full paragraph description), trim it down to core concepts
+    if len(query.split()) > 10:
+        query = " ".join(query.split()[:8])
     if not query:
         return None
         
