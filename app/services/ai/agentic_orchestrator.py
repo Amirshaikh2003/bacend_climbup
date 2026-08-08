@@ -4,7 +4,7 @@ import re
 import concurrent.futures
 from typing import Any, Dict, List
 
-from app.services.ai.gemini_client import chat_completion
+from app.services.ai.openrouter_client import chat_completion
 from app.services.ai.Diagram_fetcher import get_image_link_from_serpapi
 from app.services.ai.answer_generator import generate_mermaid_for_image
 
@@ -74,11 +74,18 @@ def run_classifier_agent(question: str, user_context: str) -> dict:
 # Agent 2: The Planner
 # -----------------------------------------------------------------------------
 def run_planner_agent(question: str, classification: dict) -> list:
-    """Agent 2: Creates the grading rubric skeleton."""
+    """Agent 2: Plans the answer structure (Topper Pedagogy)."""
     system_prompt = (
-        "You are a strict University Examiner designing a marking rubric (skeleton) for an answer. "
-        "Return an array of section objects. "
-        f"Domain: {classification['domain']}. Intent: {classification['intent']}."
+        "[SYSTEM]\n"
+        "You are an Elite University Academic Architect. Your audience is a strict Engineering Evaluator.\n"
+        "Your ONLY goal is to break the question into 4 to 6 logical sections that guarantee maximum marks.\n\n"
+        "[RULES]\n"
+        "1. MUST follow this structure: 1. Introduction (The Hook), 2-4. Core Technical Body, 5. Visual/Diagram Block (if relevant), 6. Conclusion (The Summary).\n"
+        "2. MUST return ONLY a valid JSON array of section objects.\n"
+        "3. Do NOT output any pleasantries or conversational text.\n"
+        "4. Each section object MUST have: 'section_id', 'title', 'type' (markdown, table, image, mermaid), and 'instructions' (detailed generation rules).\n"
+        "5. The 'instructions' MUST explicitly demand bullet points and keyword highlighting.\n"
+        "6. Do NOT be overly verbose. Prioritize maximum marks in minimum sections.\n"
     )
     
     schema = {
@@ -86,27 +93,16 @@ def run_planner_agent(question: str, classification: dict) -> list:
         "items": {
             "type": "OBJECT",
             "properties": {
+                "section_id": {"type": "INTEGER"},
                 "section_name": {"type": "STRING"},
                 "content_type": {"type": "STRING", "description": "markdown, table, image, mermaid, code, or math"},
-                "description": {"type": "STRING", "description": "Instructions for the writer agent on what exactly to include here."}
+                "instructions": {"type": "STRING", "description": "Detailed rules for content generation."}
             },
-            "required": ["section_name", "content_type", "description"]
+            "required": ["section_id", "section_name", "content_type", "instructions"]
         }
     }
     
-    prompt = (
-        f"Question: {question}\n\n"
-        "Design the EXACT structure of a University Topper's Exam Answer to guarantee maximum marks. "
-        "Break down the topic into 4 to 6 concise, perfectly logical sections. "
-        "CRITICAL RULE: Prioritize diagrams WHERE RELEVANT! If the topic benefits from a visual representation (e.g., Recursion Tree, block diagrams, flowcharts), explicitly include a 'mermaid' or 'image' block. If a diagram is absolutely NOT important or makes no sense, do not force it.\n\n"
-        "STRUCTURE MANDATE: Every answer MUST start with a strong 'Introduction' section and end with a solid 'Conclusion' section.\n"
-        "For Numerical: I. Introduction -> II. Given Data -> III. Formulas -> IV. Step-by-step Calculation -> V. Final Result & Conclusion.\n"
-        "For Derivations: I. Introduction -> II. Assumptions -> III. Diagram (image/mermaid) -> IV. Mathematical Steps -> V. Final Formula & Conclusion.\n"
-        "For Math/Algorithms: I. Introduction -> II. Concept -> III. Recursion Tree / Flowchart (mermaid) -> IV. Step-by-step Solution -> V. Complexity Analysis & Conclusion.\n"
-        "For TOC/Logic: I. Introduction -> II. Concept -> III. Transition Table -> IV. State Diagram (mermaid) -> V. Test Strings -> VI. Conclusion.\n"
-        "For Differences: I. Detailed Introduction -> II. Comparison Table (Mandatory) -> III. Conclusion.\n"
-        "Output the array of sections."
-    )
+    prompt = f"Question: {question}\nDomain: {classification['domain']}. Intent: {classification['intent']}.\nGenerate the structure now."
     
     try:
         res = chat_completion(
@@ -122,27 +118,28 @@ def run_planner_agent(question: str, classification: dict) -> list:
         return json.loads(_extract_json(res))
     except Exception as e:
         logger.error(f"Planner Agent failed: {e}\nRaw res: {locals().get('res', 'None')}")
-        return [{"section_name": "Answer", "content_type": "markdown", "description": "Write a detailed answer."}]
+        return [{"section_name": "Answer", "content_type": "markdown", "instructions": "Write a detailed answer."}]
 
 # -----------------------------------------------------------------------------
 # Agent 3 & 5 Combined: Content Generator & Compiler
 # -----------------------------------------------------------------------------
 def run_section_generator_agent(question: str, section: dict, full_rubric: list, image_url: str = None) -> list:
-    """Agent 3 & 5: Generates content for ONE SPECIFIC section of the rubric."""
-    from app.services.ai.gemini_client import chat_completion, chat_completion_with_images
+    """Agent 3 & 5: Generates content for ONE SPECIFIC section (DeepSeek Topper)."""
+    from app.services.ai.openrouter_client import chat_completion, chat_completion_with_images
     
     system_prompt = (
-        "You are a University Exam Topper and an Expert Engineering Scholar writing ONE SPECIFIC SECTION of a final exam answer based on a strict rubric. "
-        "Return an array of blocks exactly matching the frontend UI schema: "
-        '{"type": "markdown"|"image"|"table"|"code"|"mermaid", "content": ... (or "data" for tables/images)}.\n'
-        "CRITICAL GUIDELINES:\n"
-        "- UNIVERSITY EXAM FORMAT: Write EXACTLY like a university topper. Use clear bullet points, bold key terms, and logically number your points. Ensure the tone is strictly academic. Focus ONLY on core concepts, necessary formulas, and key points to score maximum marks. Do not be overly verbose.\n"
-        "- MATH & FORMULAS: Use LaTeX $...$ for inline math and $$...$$ for block math. CRITICAL: You MUST double-escape all LaTeX backslashes (e.g. use \\\\gamma instead of \\gamma, \\\\frac instead of \\frac) because this is a JSON output. ALWAYS bold or highlight the final answer/formula.\n"
-        "- MULTIMODAL VISION-SYNC & EXPERT KNOWLEDGE: If provided with an image, use its specific labels and variables so your text aligns with the visual. HOWEVER, NEVER compromise the academic depth of your answer. You are an Elite Scholar; rely on your own deep internal knowledge to write highly advanced, accurate theory. The image is a visual aid, NOT the sole source of truth. If the image is overly simple, aggressively expand on it with advanced engineering concepts.\n"
-        "- TABLES: When type is 'table', 'data' MUST strictly be an object: {\"headers\": [\"H1\", \"H2\"], \"rows\": [[\"R1\", \"R2\"], ...]}. NEVER return 'None' or string for table data.\n"
-        "- IMAGES: If the section asks for an 'image', return an 'image' block with 'title', 'query', and 'labels'. If a URL is already provided to you, you MUST include that exact URL in your image block output.\n"
-        "- MERMAID: If the section asks for 'mermaid', return a 'mermaid' block with valid mermaid.js code.\n"
-        "- OUTPUT: Only generate the content for the requested section. Do not generate the entire answer."
+        "[SYSTEM]\n"
+        "You are an Elite University Exam Topper and Expert Engineering Scholar. The audience is a strict Engineering Evaluator grading your paper.\n"
+        "Do NOT output pleasantries. Do NOT hallucinate. Do NOT output markdown code block wrappers around the JSON array.\n\n"
+        "[RULES]\n"
+        "1. FORMAT: Return ONLY a valid JSON array of block objects. Each block MUST have 'type' (markdown/table/image/mermaid) and 'content' (for text) or 'data' (for table).\n"
+        "2. BULLET POINTS ONLY: MUST convert all core explanations into clear, concise bullet points. Zero dense paragraphs allowed.\n"
+        "3. ACTIVE HIGHLIGHTING: MUST aggressively **bold** every key technical term, variable, and formula so the evaluator sees them instantly.\n"
+        "4. STRUCTURED NUMERICALS: For derivations or numericals, MUST use 'Given Data' -> 'Formulas' -> 'Step-by-step Calculation' -> 'Final Answer'.\n"
+        "5. MATH RIGOR: MUST use double-escaped LaTeX `\\\\gamma` or `\\\\frac` for ALL math. This is a strict JSON parsing requirement.\n"
+        "6. VERBOSITY PENALTY: Do not be overly verbose. Maximize information density and technical accuracy.\n"
+        "7. TABLES: If type is 'table', 'data' MUST be an object: {\"headers\": [\"H1\"], \"rows\": [[\"R1\"]]}.\n"
+        "8. MULTIMODAL SYNC: If an image URL is provided, MUST integrate its exact labels/variables into your explanation.\n"
     )
     
     prompt = (

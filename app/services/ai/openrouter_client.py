@@ -1,91 +1,96 @@
+"""
+OpenRouter API Client for DeepSeek (Text) and Multimodal Fallback.
+"""
+
+import os
 import json
 import logging
-import urllib.error
-import urllib.request
-from typing import Dict, List
-
+import base64
+import requests
+from typing import List, Dict, Any
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_API_BASE = "https://openrouter.ai/api/v1/chat/completions"
 
+def _get_api_key():
+    key = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
+    if not key:
+        raise ValueError("OPENROUTER_API_KEY is not set in environment.")
+    return key
 
-class OpenRouterError(RuntimeError):
-    pass
-
-
-def chat_completion(
-    messages: List[Dict[str, str]],
-    model: str | None = None,
-    max_tokens: int = 4096,
-    temperature: float = 0.25,
-) -> str:
-    if not settings.OPENROUTER_API_KEY:
-        raise OpenRouterError("OPENROUTER API key is missing in backend/.env")
-
-    models_to_try = [model] if model else settings.OPENROUTER_MODELS_POOL
-    
-    import random
-    if not model and len(models_to_try) > 1:
-        models_to_try = list(models_to_try)
-        random.shuffle(models_to_try)
-
-    last_error: Exception | None = None
-    for m in dict.fromkeys(m for m in models_to_try if m):
-        try:
-            return _chat_completion_for_model(
-                model=m,
-                messages=messages,
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
-        except Exception as exc:
-            last_error = exc
-            logger.warning("OpenRouter model %s failed: %s", m, exc)
-
-    raise OpenRouterError(f"All OpenRouter models failed: {last_error}")
-
-
-def _chat_completion_for_model(
-    model: str,
-    messages: List[Dict[str, str]],
-    max_tokens: int,
-    temperature: float,
-) -> str:
-    payload = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
+def _get_headers():
+    return {
+        "Authorization": f"Bearer {_get_api_key()}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://climbup.ai",
+        "X-Title": "ClimbUP AI Engine"
     }
 
-    request = urllib.request.Request(
-        OPENROUTER_API_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "http://localhost:8000",
-            "X-Title": settings.APP_NAME,
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        },
-        method="POST",
-    )
-
-    import ssl
-    context = ssl.create_default_context()
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
-
+def chat_completion(messages: List[Dict[str, str]], max_tokens: int = 4096, temperature: float = 0.3) -> str:
+    """Standard text generation using DeepSeek V3/Chat via OpenRouter."""
+    payload = {
+        "model": "deepseek/deepseek-chat", # DeepSeek V3 (High quality, massive tokens)
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens
+    }
+    
     try:
-        with urllib.request.urlopen(request, timeout=120, context=context) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        error_body = exc.read().decode("utf-8", errors="replace")
-        raise OpenRouterError(f"HTTP {exc.code}: {error_body}") from exc
+        # Bypass SSL verification for robust local execution, just in case
+        response = requests.post(OPENROUTER_API_BASE, headers=_get_headers(), json=payload, verify=False, timeout=120)
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+    except requests.exceptions.RequestException as e:
+        logger.error(f"OpenRouter Text API error: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"Response: {e.response.text}")
+        raise e
 
+def _get_base64_from_url(url: str) -> str:
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    response = requests.get(url, headers=headers, timeout=10, verify=False)
+    response.raise_for_status()
+    return base64.b64encode(response.content).decode('utf-8')
+
+def chat_completion_with_images(messages: List[Dict[str, str]], image_urls: List[str], max_tokens: int = 4096, temperature: float = 0.3) -> str:
+    """Multimodal generation using Claude 3.5 Sonnet (Best for Vision/JSON) via OpenRouter."""
+    vision_messages = []
+    
+    for msg in messages:
+        if msg["role"] == "user":
+            content = [{"type": "text", "text": msg["content"]}]
+            for url in image_urls:
+                try:
+                    b64 = _get_base64_from_url(url)
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{b64}"
+                        }
+                    })
+                except Exception as e:
+                    logger.warning(f"Failed to fetch image for OpenRouter Vision ({url}): {e}")
+            vision_messages.append({"role": "user", "content": content})
+        else:
+            vision_messages.append(msg)
+            
+    payload = {
+        "model": "anthropic/claude-3.5-sonnet", # Claude 3.5 Sonnet is the king of structured vision tasks
+        "messages": vision_messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens
+    }
+            
     try:
-        return data["choices"][0]["message"]["content"] or ""
-    except (KeyError, IndexError, TypeError) as exc:
-        raise OpenRouterError(f"Unexpected OpenRouter response: {data}") from exc
+        response = requests.post(OPENROUTER_API_BASE, headers=_get_headers(), json=payload, verify=False, timeout=120)
+        response.raise_for_status()
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+    except requests.exceptions.RequestException as e:
+        logger.error(f"OpenRouter Vision API error: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"Response: {e.response.text}")
+        raise e
