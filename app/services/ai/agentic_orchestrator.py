@@ -89,8 +89,8 @@ def run_planner_agent(question: str, classification: dict) -> list:
     
     prompt = (
         f"Question: {question}\n\n"
-        "Design a HIGHLY DETAILED and COMPREHENSIVE answer structure to get maximum university marks. "
-        "Break down the topic into 5 to 8 in-depth sections. "
+        "Design a HIGHLY ACCURATE and STRUCTURED answer to get maximum university marks. "
+        "Break down the topic into 4 to 6 concise sections. "
         "CRITICAL RULE: YOU MUST AGGRESSIVELY PRIORITIZE DIAGRAMS! If the topic can even slightly benefit from a visual representation (e.g., a Recursion Tree for recurrences, block diagrams, flowcharts, architecture maps, free-body diagrams), you MUST explicitly include a 'mermaid' or 'image' block section. NEVER skip diagrams for complex topics.\n\n"
         "For Numerical: Given Data -> Formulas -> Step-by-step Calculation -> Result.\n"
         "For Derivations: Assumptions -> Diagram (image/mermaid) -> Step-by-step Mathematical Steps -> Final Formula.\n"
@@ -126,7 +126,7 @@ def run_section_generator_agent(question: str, section: dict, full_rubric: list)
         "Return an array of blocks exactly matching the frontend UI schema: "
         '{"type": "markdown"|"image"|"table"|"code"|"mermaid", "content": ... (or "data" for tables/images)}.\n'
         "CRITICAL GUIDELINES:\n"
-        "- LENGTH & QUALITY: Write LONG, extremely detailed, and highly technical explanations. DO NOT summarize. Provide in-depth paragraphs.\n"
+        "- LENGTH & QUALITY: Write concise, highly accurate, and impactful explanations. Focus ONLY on core concepts, necessary formulas, and key points required for maximum university marks. Avoid unnecessary fluff and excessive length. Do not be overly verbose.\n"
         "- Use markdown for text/math. Bold important keywords. Use LaTeX $...$ or $$...$$ for math.\n"
         "- TABLES: When type is 'table', 'data' MUST strictly be an object: {\"headers\": [\"H1\", \"H2\"], \"rows\": [[\"R1\", \"R2\"], ...]}. NEVER return 'None' or string for table data.\n"
         "- IMAGES: If the section asks for an 'image', return an 'image' block with 'title', 'query', and 'labels'. The 'query' MUST be highly specific (e.g., '8086 microprocessor internal architecture block diagram') for accurate internet search.\n"
