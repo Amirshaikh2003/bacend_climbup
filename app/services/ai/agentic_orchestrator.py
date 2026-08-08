@@ -91,7 +91,7 @@ def run_planner_agent(question: str, classification: dict) -> list:
         f"Question: {question}\n\n"
         "Design the EXACT structure of a University Topper's Exam Answer to guarantee maximum marks. "
         "Break down the topic into 4 to 6 concise, perfectly logical sections. "
-        "CRITICAL RULE: YOU MUST AGGRESSIVELY PRIORITIZE DIAGRAMS! If the topic can even slightly benefit from a visual representation (e.g., a Recursion Tree for recurrences, block diagrams, flowcharts, architecture maps, free-body diagrams), you MUST explicitly include a 'mermaid' or 'image' block section. NEVER skip diagrams for complex topics.\n\n"
+        "CRITICAL RULE: Prioritize diagrams WHERE RELEVANT! If the topic benefits from a visual representation (e.g., Recursion Tree, block diagrams, flowcharts), explicitly include a 'mermaid' or 'image' block. If a diagram is absolutely NOT important or makes no sense, do not force it.\n\n"
         "STRUCTURE MANDATE: Every answer MUST start with a strong 'Introduction' section and end with a solid 'Conclusion' section.\n"
         "For Numerical: I. Introduction -> II. Given Data -> III. Formulas -> IV. Step-by-step Calculation -> V. Final Result & Conclusion.\n"
         "For Derivations: I. Introduction -> II. Assumptions -> III. Diagram (image/mermaid) -> IV. Mathematical Steps -> V. Final Formula & Conclusion.\n"
@@ -120,8 +120,10 @@ def run_planner_agent(question: str, classification: dict) -> list:
 # -----------------------------------------------------------------------------
 # Agent 3 & 5 Combined: Content Generator & Compiler
 # -----------------------------------------------------------------------------
-def run_section_generator_agent(question: str, section: dict, full_rubric: list) -> list:
+def run_section_generator_agent(question: str, section: dict, full_rubric: list, image_url: str = None) -> list:
     """Agent 3 & 5: Generates content for ONE SPECIFIC section of the rubric."""
+    from app.services.ai.gemini_client import chat_completion, chat_completion_with_images
+    
     system_prompt = (
         "You are a University Exam Topper and an Expert Engineering Scholar writing ONE SPECIFIC SECTION of a final exam answer based on a strict rubric. "
         "Return an array of blocks exactly matching the frontend UI schema: "
@@ -129,8 +131,9 @@ def run_section_generator_agent(question: str, section: dict, full_rubric: list)
         "CRITICAL GUIDELINES:\n"
         "- UNIVERSITY EXAM FORMAT: Write EXACTLY like a university topper. Use clear bullet points, bold key terms, and logically number your points. Ensure the tone is strictly academic. Focus ONLY on core concepts, necessary formulas, and key points to score maximum marks. Do not be overly verbose.\n"
         "- MATH & FORMULAS: Use LaTeX $...$ for inline math and $$...$$ for block math. ALWAYS bold or highlight the final answer/formula.\n"
+        "- MULTIMODAL VISION-SYNC: If you are provided with an image, you MUST write your explanation by referring exactly to the labels, structural components, and variables shown in THIS specific image. Ensure total harmony between your text and the diagram.\n"
         "- TABLES: When type is 'table', 'data' MUST strictly be an object: {\"headers\": [\"H1\", \"H2\"], \"rows\": [[\"R1\", \"R2\"], ...]}. NEVER return 'None' or string for table data.\n"
-        "- IMAGES: If the section asks for an 'image', return an 'image' block with 'title', 'query', and 'labels'. The 'query' MUST be highly specific (e.g., '8086 microprocessor internal architecture block diagram') for accurate internet search.\n"
+        "- IMAGES: If the section asks for an 'image', return an 'image' block with 'title', 'query', and 'labels'. If a URL is already provided to you, you MUST include that exact URL in your image block output.\n"
         "- MERMAID: If the section asks for 'mermaid', return a 'mermaid' block with valid mermaid.js code.\n"
         "- OUTPUT: Only generate the content for the requested section. Do not generate the entire answer."
     )
@@ -139,18 +142,23 @@ def run_section_generator_agent(question: str, section: dict, full_rubric: list)
         f"Question: {question}\n\n"
         f"Full Answer Rubric (For Context Only):\n{json.dumps(full_rubric, indent=2)}\n\n"
         f"TARGET SECTION TO GENERATE NOW:\n{json.dumps(section, indent=2)}\n\n"
-        "Generate the complete, highly-detailed content for THIS SECTION ONLY as a JSON array of blocks."
     )
+    if image_url:
+        prompt += f"PRE-FETCHED DIAGRAM URL: {image_url}\n(You MUST use this EXACT URL in your JSON output if returning an image block.)\n\n"
+        
+    prompt += "Generate the complete, highly-detailed content for THIS SECTION ONLY as a JSON array of blocks."
     
     try:
-        res = chat_completion(
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=4096,
-            temperature=0.4
-        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt}
+        ]
+        
+        if image_url:
+            res = chat_completion_with_images(messages, image_urls=[image_url], max_tokens=4096, temperature=0.3)
+        else:
+            res = chat_completion(messages, max_tokens=4096, temperature=0.3)
+            
         blocks = json.loads(_extract_json(res))
         
         # Validation layer for tables (Empty Table Fix)
@@ -182,14 +190,15 @@ def run_visual_agent(blocks: list, classification: dict, question: str) -> list:
                 updated_blocks.append(fallback if fallback else block)
                 continue
                 
-            # Otherwise, try SerpAPI search
-            url = None
-            try:
-                # Add recommended websites for SerpApi precision
-                block["recommended_website"] = "GeeksforGeeks, Wikipedia"
-                url = get_image_link_from_serpapi(block)
-            except Exception as e:
-                logger.warning(f"Image fetch failed: {e}")
+            # Otherwise, try SerpAPI search or use pre-fetched URL
+            url = block.get("url")
+            if not url:
+                try:
+                    # Add recommended websites for SerpApi precision
+                    block["recommended_website"] = "GeeksforGeeks, Wikipedia"
+                    url = get_image_link_from_serpapi(block)
+                except Exception as e:
+                    logger.warning(f"Image fetch failed: {e}")
                 
             if url:
                 block["url"] = url
@@ -219,15 +228,33 @@ def generate_agentic_answer(question: str, user_context: str = "") -> dict:
     rubric = run_planner_agent(question, classification)
     logger.info(f"[Agent 2] Planner Output: {rubric}")
     
-    # Step 3 & 5: Generate Content (Iterative & Parallel)
+    # Step 3 & 5: Generate Content (Sequential to prevent 429)
     raw_blocks = []
-    logger.info(f"[Agent 3] Starting parallel generation for {len(rubric)} sections...")
+    logger.info(f"[Agent 3] Starting sequential generation for {len(rubric)} sections...")
     
-    # We maintain order by submitting futures and storing their index
+    from app.services.ai.Diagram_fetcher import _fetch_candidate_image_urls, _verify_image_with_vision
+    
     future_to_index = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
         for idx, section in enumerate(rubric):
-            future = executor.submit(run_section_generator_agent, question, section, rubric)
+            image_url = None
+            # Pre-fetch image if the section requires one
+            if section.get("content_type") == "image":
+                query = str(section.get("query") or section.get("description") or "").strip()
+                if len(query.split()) > 10:
+                    query = " ".join(query.split()[:8])
+                if query:
+                    try:
+                        logger.info(f"Pre-fetching image for query: {query}")
+                        candidates = _fetch_candidate_image_urls(query)
+                        image_url = _verify_image_with_vision(query, candidates)
+                        if image_url:
+                            section["pre_fetched_url"] = image_url
+                            logger.info(f"Successfully pre-fetched: {image_url}")
+                    except Exception as e:
+                        logger.warning(f"Pre-fetch failed for {query}: {e}")
+            
+            future = executor.submit(run_section_generator_agent, question, section, rubric, image_url)
             future_to_index[future] = idx
             
         # Collect results in order
