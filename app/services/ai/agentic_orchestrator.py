@@ -15,7 +15,14 @@ def _extract_json(text: str) -> str:
     if text.startswith("```json"): text = text[7:-3]
     elif text.startswith("```"): text = text[3:-3]
     match = re.search(r"(\{.*\}|\[.*\])", text, re.DOTALL)
-    return match.group(1) if match else text
+    if not match:
+        return text
+        
+    json_str = match.group(1)
+    # Fix invalid LaTeX escapes (e.g. \gamma -> \\gamma) for JSON parsing
+    json_str = re.sub(r'\\(?![ntrbf\\"/])', r'\\\\', json_str)
+    
+    return json_str
 
 
 # -----------------------------------------------------------------------------
@@ -130,7 +137,7 @@ def run_section_generator_agent(question: str, section: dict, full_rubric: list,
         '{"type": "markdown"|"image"|"table"|"code"|"mermaid", "content": ... (or "data" for tables/images)}.\n'
         "CRITICAL GUIDELINES:\n"
         "- UNIVERSITY EXAM FORMAT: Write EXACTLY like a university topper. Use clear bullet points, bold key terms, and logically number your points. Ensure the tone is strictly academic. Focus ONLY on core concepts, necessary formulas, and key points to score maximum marks. Do not be overly verbose.\n"
-        "- MATH & FORMULAS: Use LaTeX $...$ for inline math and $$...$$ for block math. ALWAYS bold or highlight the final answer/formula.\n"
+        "- MATH & FORMULAS: Use LaTeX $...$ for inline math and $$...$$ for block math. CRITICAL: You MUST double-escape all LaTeX backslashes (e.g. use \\\\gamma instead of \\gamma, \\\\frac instead of \\frac) because this is a JSON output. ALWAYS bold or highlight the final answer/formula.\n"
         "- MULTIMODAL VISION-SYNC & EXPERT KNOWLEDGE: If provided with an image, use its specific labels and variables so your text aligns with the visual. HOWEVER, NEVER compromise the academic depth of your answer. You are an Elite Scholar; rely on your own deep internal knowledge to write highly advanced, accurate theory. The image is a visual aid, NOT the sole source of truth. If the image is overly simple, aggressively expand on it with advanced engineering concepts.\n"
         "- TABLES: When type is 'table', 'data' MUST strictly be an object: {\"headers\": [\"H1\", \"H2\"], \"rows\": [[\"R1\", \"R2\"], ...]}. NEVER return 'None' or string for table data.\n"
         "- IMAGES: If the section asks for an 'image', return an 'image' block with 'title', 'query', and 'labels'. If a URL is already provided to you, you MUST include that exact URL in your image block output.\n"
