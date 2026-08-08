@@ -88,11 +88,12 @@ def run_planner_agent(question: str, classification: dict) -> list:
     
     prompt = (
         f"Question: {question}\n\n"
-        "Design the perfect answer structure to get maximum marks. "
-        "For Numerical: Given Data -> Formulas -> Calculation -> Result.\n"
-        "For Derivations: Assumptions -> Diagram -> Steps -> Final Formula.\n"
-        "For TOC/Logic: Concept -> Transition Table -> State Diagram -> Test Strings.\n"
-        "For Differences: Intro -> Table -> Conclusion.\n"
+        "Design a HIGHLY DETAILED and COMPREHENSIVE answer structure to get maximum university marks. "
+        "Break down the topic into 5 to 8 in-depth sections. If a real-world diagram (like architecture, hardware, block diagrams, or standard flowcharts) is essential, explicitly request an 'image' block.\n"
+        "For Numerical: Given Data -> Formulas -> Step-by-step Calculation -> Result.\n"
+        "For Derivations: Assumptions -> Diagram (image/mermaid) -> Step-by-step Mathematical Steps -> Final Formula.\n"
+        "For TOC/Logic: Concept -> Transition Table -> State Diagram (mermaid) -> Test Strings.\n"
+        "For Differences: Detailed Intro -> Table (Mandatory) -> Conclusion.\n"
         "Output the array of sections."
     )
     
@@ -121,14 +122,15 @@ def run_generator_agent(question: str, rubric: list) -> list:
         "You are an expert Engineering Scholar writing a final exam answer based on a strict rubric. "
         "Return an array of blocks exactly matching the frontend UI schema: "
         '{"type": "markdown"|"image"|"table"|"code"|"mermaid", "content": ... (or "data" for tables/images)}.\n'
-        "Guidelines:\n"
+        "CRITICAL GUIDELINES:\n"
+        "- LENGTH & QUALITY: Write LONG, extremely detailed, and highly technical explanations. DO NOT summarize. Provide in-depth paragraphs.\n"
         "- Use markdown for text/math. Bold important keywords. Use LaTeX $...$ or $$...$$ for math.\n"
-        "- Use 'table' type with 'data' matrix for tabular comparisons.\n"
-        "- If a rubric section asks for an 'image', return an 'image' block with 'title', 'query', and 'labels'.\n"
-        "- If a rubric section asks for 'mermaid', return a 'mermaid' block with valid mermaid.js code.\n"
+        "- TABLES: When type is 'table', 'data' MUST strictly be an object: {\"headers\": [\"H1\", \"H2\"], \"rows\": [[\"R1\", \"R2\"], ...]}. NEVER return 'None' or string for table data.\n"
+        "- IMAGES: If a rubric section asks for an 'image', return an 'image' block with 'title', 'query', and 'labels'. The 'query' MUST be highly specific (e.g., '8086 microprocessor internal architecture block diagram') for accurate internet search.\n"
+        "- MERMAID: If a rubric section asks for 'mermaid', return a 'mermaid' block with valid mermaid.js code.\n"
     )
     
-    prompt = f"Question: {question}\n\nRubric Skeleton:\n{json.dumps(rubric, indent=2)}\n\nGenerate the complete answer as a JSON array of blocks."
+    prompt = f"Question: {question}\n\nRubric Skeleton:\n{json.dumps(rubric, indent=2)}\n\nGenerate the complete, highly-detailed answer as a JSON array of blocks."
     
     try:
         res = chat_completion(
