@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import concurrent.futures
 from typing import Any, Dict, List
 
 from app.services.ai.gemini_client import chat_completion
@@ -116,21 +117,27 @@ def run_planner_agent(question: str, classification: dict) -> list:
 # -----------------------------------------------------------------------------
 # Agent 3 & 5 Combined: Content Generator & Compiler
 # -----------------------------------------------------------------------------
-def run_generator_agent(question: str, rubric: list) -> list:
-    """Agent 3 & 5: Fills the rubric with content and outputs final JSON blocks."""
+def run_section_generator_agent(question: str, section: dict, full_rubric: list) -> list:
+    """Agent 3 & 5: Generates content for ONE SPECIFIC section of the rubric."""
     system_prompt = (
-        "You are an expert Engineering Scholar writing a final exam answer based on a strict rubric. "
+        "You are an expert Engineering Scholar writing ONE SPECIFIC SECTION of a final exam answer based on a strict rubric. "
         "Return an array of blocks exactly matching the frontend UI schema: "
         '{"type": "markdown"|"image"|"table"|"code"|"mermaid", "content": ... (or "data" for tables/images)}.\n'
         "CRITICAL GUIDELINES:\n"
         "- LENGTH & QUALITY: Write LONG, extremely detailed, and highly technical explanations. DO NOT summarize. Provide in-depth paragraphs.\n"
         "- Use markdown for text/math. Bold important keywords. Use LaTeX $...$ or $$...$$ for math.\n"
         "- TABLES: When type is 'table', 'data' MUST strictly be an object: {\"headers\": [\"H1\", \"H2\"], \"rows\": [[\"R1\", \"R2\"], ...]}. NEVER return 'None' or string for table data.\n"
-        "- IMAGES: If a rubric section asks for an 'image', return an 'image' block with 'title', 'query', and 'labels'. The 'query' MUST be highly specific (e.g., '8086 microprocessor internal architecture block diagram') for accurate internet search.\n"
-        "- MERMAID: If a rubric section asks for 'mermaid', return a 'mermaid' block with valid mermaid.js code.\n"
+        "- IMAGES: If the section asks for an 'image', return an 'image' block with 'title', 'query', and 'labels'. The 'query' MUST be highly specific (e.g., '8086 microprocessor internal architecture block diagram') for accurate internet search.\n"
+        "- MERMAID: If the section asks for 'mermaid', return a 'mermaid' block with valid mermaid.js code.\n"
+        "- OUTPUT: Only generate the content for the requested section. Do not generate the entire answer."
     )
     
-    prompt = f"Question: {question}\n\nRubric Skeleton:\n{json.dumps(rubric, indent=2)}\n\nGenerate the complete, highly-detailed answer as a JSON array of blocks."
+    prompt = (
+        f"Question: {question}\n\n"
+        f"Full Answer Rubric (For Context Only):\n{json.dumps(full_rubric, indent=2)}\n\n"
+        f"TARGET SECTION TO GENERATE NOW:\n{json.dumps(section, indent=2)}\n\n"
+        "Generate the complete, highly-detailed content for THIS SECTION ONLY as a JSON array of blocks."
+    )
     
     try:
         res = chat_completion(
@@ -138,13 +145,24 @@ def run_generator_agent(question: str, rubric: list) -> list:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=8192,
+            max_tokens=4096,
             temperature=0.4
         )
-        return json.loads(_extract_json(res))
+        blocks = json.loads(_extract_json(res))
+        
+        # Validation layer for tables (Empty Table Fix)
+        for block in blocks:
+            if block.get("type") == "table":
+                data = block.get("data")
+                if not isinstance(data, dict) or "headers" not in data or "rows" not in data:
+                    logger.warning(f"Invalid table data detected: {data}. Converting to markdown.")
+                    block["type"] = "markdown"
+                    block["content"] = str(data)
+                    
+        return blocks
     except Exception as e:
-        logger.error(f"Generator Agent failed: {e}\nRaw res: {locals().get('res', 'None')}")
-        return [{"type": "markdown", "content": f"**Error generating advanced answer.**\nPlease try again."}]
+        logger.error(f"Section Generator Agent failed: {e}\nRaw res: {locals().get('res', 'None')}")
+        return [{"type": "markdown", "content": f"*(Content generation failed for this section)*"}]
 
 # -----------------------------------------------------------------------------
 # Agent 4: The Art Director (Visual Enrichment)
@@ -198,9 +216,32 @@ def generate_agentic_answer(question: str, user_context: str = "") -> dict:
     rubric = run_planner_agent(question, classification)
     logger.info(f"[Agent 2] Planner Output: {rubric}")
     
-    # Step 3 & 5: Generate Content
-    raw_blocks = run_generator_agent(question, rubric)
-    logger.info(f"[Agent 3] Generator created {len(raw_blocks)} blocks.")
+    # Step 3 & 5: Generate Content (Iterative & Parallel)
+    raw_blocks = []
+    logger.info(f"[Agent 3] Starting parallel generation for {len(rubric)} sections...")
+    
+    # We maintain order by submitting futures and storing their index
+    future_to_index = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        for idx, section in enumerate(rubric):
+            future = executor.submit(run_section_generator_agent, question, section, rubric)
+            future_to_index[future] = idx
+            
+        # Collect results in order
+        section_results = [[] for _ in range(len(rubric))]
+        for future in concurrent.futures.as_completed(future_to_index):
+            idx = future_to_index[future]
+            try:
+                section_blocks = future.result()
+                section_results[idx] = section_blocks
+            except Exception as e:
+                logger.error(f"Section {idx} generated an exception: {e}")
+                
+        # Flatten the list of blocks
+        for blocks in section_results:
+            raw_blocks.extend(blocks)
+            
+    logger.info(f"[Agent 3] Generator combined {len(raw_blocks)} total blocks.")
     
     # Step 4: Visuals
     final_blocks = run_visual_agent(raw_blocks, classification, question)

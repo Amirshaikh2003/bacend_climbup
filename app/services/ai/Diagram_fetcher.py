@@ -18,22 +18,22 @@ _TIMEOUT     = 15  # seconds
 # Core Tavily API call
 # ---------------------------------------------------------------------------
 
-def _fetch_image_url(search_query: str) -> Optional[str]:
-    """Return the first usable image URL for *search_query*, or None."""
+def _fetch_candidate_image_urls(search_query: str) -> List[str]:
+    """Return up to 3 usable image URLs for *search_query*."""
     api_key = os.getenv("TAVILY_API_KEY")
     
     if not api_key:
         logger.warning("TAVILY_API_KEY not set")
-        return None
+        return []
 
     try:
         url = "https://api.tavily.com/search"
         payload = {
             "api_key": api_key,
-            "query": search_query + " diagram",
+            "query": search_query + " diagram or flowchart",
             "search_depth": "basic",
             "include_images": True,
-            "max_results": 1
+            "max_results": 5
         }
         resp = requests.post(url, json=payload, timeout=_TIMEOUT, verify=False)
         resp.raise_for_status()
@@ -46,19 +46,55 @@ def _fetch_image_url(search_query: str) -> Optional[str]:
             "tiktok", "news", "stock", "vector", "pngtree", "vecteezy", "ebay", "etsy"
         ]
         
+        valid_urls = []
         for img in images:
             if isinstance(img, str) and img.startswith("http"):
                 img_lower = img.lower()
                 # Ensure the image is NOT from a stock photo or e-commerce site
                 if not any(blocked in img_lower for blocked in blocked_keywords):
-                    return img
-                    
-        return None  # No valid educational image found, fallback to mermaid
+                    valid_urls.append(img)
+                    if len(valid_urls) >= 3:
+                        break
+                        
+        return valid_urls
             
     except Exception as exc:
         logger.warning("Tavily Image fetch failed for %r: %s", search_query, exc)
 
-    return None
+    return []
+
+def _verify_image_with_vision(query: str, urls: List[str]) -> Optional[str]:
+    """Uses Gemini Vision to evaluate which diagram is the most accurate."""
+    from app.services.ai.gemini_client import chat_completion_with_images
+    
+    if not urls:
+        return None
+    if len(urls) == 1:
+        return urls[0]
+        
+    system_prompt = (
+        "You are an expert Engineering AI. You are given a technical search query and a few candidate images. "
+        "Select the image that most accurately represents the query (e.g., correct P-V diagram, correct circuit, etc.). "
+        "Return exactly the URL string of the best image. Do not return any other text. If none are good, return the first one."
+    )
+    
+    prompt = f"Search Query: {query}\n\nCandidate URLs:\n"
+    for i, u in enumerate(urls):
+        prompt += f"{i+1}. {u}\n"
+        
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt}
+    ]
+    
+    try:
+        best_url = chat_completion_with_images(messages, image_urls=urls, max_tokens=100, temperature=0.1).strip()
+        if best_url in urls:
+            return best_url
+        return urls[0]
+    except Exception as e:
+        logger.warning(f"Vision verification failed: {e}")
+        return urls[0]
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +117,12 @@ def get_image_link_from_serpapi(image_block: Dict[str, Any]) -> Optional[str]:
         return None
 
     query = str(image_block.get("search_query") or image_block.get("title") or "").strip()
-    return _fetch_image_url(query) if query else None
+    if not query:
+        return None
+        
+    candidates = _fetch_candidate_image_urls(query)
+    best_url = _verify_image_with_vision(query, candidates)
+    return best_url
 
 
 def replace_image_blocks_with_urls(payload: Dict[str, Any]) -> Dict[str, Any]:
