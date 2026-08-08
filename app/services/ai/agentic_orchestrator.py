@@ -90,9 +90,11 @@ def run_planner_agent(question: str, classification: dict) -> list:
     prompt = (
         f"Question: {question}\n\n"
         "Design a HIGHLY DETAILED and COMPREHENSIVE answer structure to get maximum university marks. "
-        "Break down the topic into 5 to 8 in-depth sections. If a real-world diagram (like architecture, hardware, block diagrams, or standard flowcharts) is essential, explicitly request an 'image' block.\n"
+        "Break down the topic into 5 to 8 in-depth sections. "
+        "CRITICAL RULE: YOU MUST AGGRESSIVELY PRIORITIZE DIAGRAMS! If the topic can even slightly benefit from a visual representation (e.g., a Recursion Tree for recurrences, block diagrams, flowcharts, architecture maps, free-body diagrams), you MUST explicitly include a 'mermaid' or 'image' block section. NEVER skip diagrams for complex topics.\n\n"
         "For Numerical: Given Data -> Formulas -> Step-by-step Calculation -> Result.\n"
         "For Derivations: Assumptions -> Diagram (image/mermaid) -> Step-by-step Mathematical Steps -> Final Formula.\n"
+        "For Math/Algorithms/Recurrence: Concept -> Recursion Tree / Flowchart Diagram (mermaid) -> Step-by-step Solution -> Final Complexity Analysis.\n"
         "For TOC/Logic: Concept -> Transition Table -> State Diagram (mermaid) -> Test Strings.\n"
         "For Differences: Detailed Intro -> Table (Mandatory) -> Conclusion.\n"
         "Output the array of sections."
