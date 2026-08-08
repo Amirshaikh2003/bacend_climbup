@@ -89,15 +89,15 @@ def run_planner_agent(question: str, classification: dict) -> list:
     
     prompt = (
         f"Question: {question}\n\n"
-        "Design a HIGHLY ACCURATE and STRUCTURED answer to get maximum university marks. "
-        "Break down the topic into 4 to 6 concise sections. "
+        "Design the EXACT structure of a University Topper's Exam Answer to guarantee maximum marks. "
+        "Break down the topic into 4 to 6 concise, perfectly logical sections. "
         "CRITICAL RULE: YOU MUST AGGRESSIVELY PRIORITIZE DIAGRAMS! If the topic can even slightly benefit from a visual representation (e.g., a Recursion Tree for recurrences, block diagrams, flowcharts, architecture maps, free-body diagrams), you MUST explicitly include a 'mermaid' or 'image' block section. NEVER skip diagrams for complex topics.\n\n"
-        "STRUCTURE MANDATE: Every answer MUST start with a strong 'Introduction / Definition' section and end with a solid 'Conclusion / Real-World Application' section.\n"
-        "For Numerical: Introduction -> Given Data -> Formulas -> Step-by-step Calculation -> Result & Conclusion.\n"
-        "For Derivations: Introduction -> Assumptions -> Diagram (image/mermaid) -> Step-by-step Mathematical Steps -> Final Formula & Conclusion.\n"
-        "For Math/Algorithms/Recurrence: Introduction -> Concept -> Recursion Tree / Flowchart Diagram (mermaid) -> Step-by-step Solution -> Final Complexity Analysis & Conclusion.\n"
-        "For TOC/Logic: Introduction -> Concept -> Transition Table -> State Diagram (mermaid) -> Test Strings -> Conclusion.\n"
-        "For Differences: Detailed Introduction -> Table (Mandatory) -> Conclusion.\n"
+        "STRUCTURE MANDATE: Every answer MUST start with a strong 'Introduction' section and end with a solid 'Conclusion' section.\n"
+        "For Numerical: I. Introduction -> II. Given Data -> III. Formulas -> IV. Step-by-step Calculation -> V. Final Result & Conclusion.\n"
+        "For Derivations: I. Introduction -> II. Assumptions -> III. Diagram (image/mermaid) -> IV. Mathematical Steps -> V. Final Formula & Conclusion.\n"
+        "For Math/Algorithms: I. Introduction -> II. Concept -> III. Recursion Tree / Flowchart (mermaid) -> IV. Step-by-step Solution -> V. Complexity Analysis & Conclusion.\n"
+        "For TOC/Logic: I. Introduction -> II. Concept -> III. Transition Table -> IV. State Diagram (mermaid) -> V. Test Strings -> VI. Conclusion.\n"
+        "For Differences: I. Detailed Introduction -> II. Comparison Table (Mandatory) -> III. Conclusion.\n"
         "Output the array of sections."
     )
     
@@ -123,12 +123,12 @@ def run_planner_agent(question: str, classification: dict) -> list:
 def run_section_generator_agent(question: str, section: dict, full_rubric: list) -> list:
     """Agent 3 & 5: Generates content for ONE SPECIFIC section of the rubric."""
     system_prompt = (
-        "You are an expert Engineering Scholar writing ONE SPECIFIC SECTION of a final exam answer based on a strict rubric. "
+        "You are a University Exam Topper and an Expert Engineering Scholar writing ONE SPECIFIC SECTION of a final exam answer based on a strict rubric. "
         "Return an array of blocks exactly matching the frontend UI schema: "
         '{"type": "markdown"|"image"|"table"|"code"|"mermaid", "content": ... (or "data" for tables/images)}.\n'
         "CRITICAL GUIDELINES:\n"
-        "- LENGTH & QUALITY: Write concise, highly accurate, and impactful explanations. Focus ONLY on core concepts, necessary formulas, and key points required for maximum university marks. Avoid unnecessary fluff and excessive length. Do not be overly verbose.\n"
-        "- Use markdown for text/math. Bold important keywords. Use LaTeX $...$ or $$...$$ for math.\n"
+        "- UNIVERSITY EXAM FORMAT: Write EXACTLY like a university topper. Use clear bullet points, bold key terms, and logically number your points. Ensure the tone is strictly academic. Focus ONLY on core concepts, necessary formulas, and key points to score maximum marks. Do not be overly verbose.\n"
+        "- MATH & FORMULAS: Use LaTeX $...$ for inline math and $$...$$ for block math. ALWAYS bold or highlight the final answer/formula.\n"
         "- TABLES: When type is 'table', 'data' MUST strictly be an object: {\"headers\": [\"H1\", \"H2\"], \"rows\": [[\"R1\", \"R2\"], ...]}. NEVER return 'None' or string for table data.\n"
         "- IMAGES: If the section asks for an 'image', return an 'image' block with 'title', 'query', and 'labels'. The 'query' MUST be highly specific (e.g., '8086 microprocessor internal architecture block diagram') for accurate internet search.\n"
         "- MERMAID: If the section asks for 'mermaid', return a 'mermaid' block with valid mermaid.js code.\n"
