@@ -97,7 +97,7 @@ def run_planner_agent(question: str, classification: dict) -> list:
     prompt = (
         f"Question: {question}\n\n"
         "Design the EXACT structure of a University Topper's Exam Answer to guarantee maximum marks. "
-        "Break down the topic into 4 to 6 concise, perfectly logical sections. "
+        "Break down the topic into 5 to 8 in-depth sections. "
         "CRITICAL RULE: Prioritize diagrams WHERE RELEVANT! If the topic benefits from a visual representation (e.g., Recursion Tree, block diagrams, flowcharts), explicitly include a 'mermaid' or 'image' block. If a diagram is absolutely NOT important or makes no sense, do not force it.\n\n"
         "STRUCTURE MANDATE: Every answer MUST start with a strong 'Introduction' section and end with a solid 'Conclusion' section.\n"
         "For Numerical: I. Introduction -> II. Given Data -> III. Formulas -> IV. Step-by-step Calculation -> V. Final Result & Conclusion.\n"
@@ -136,7 +136,7 @@ def run_section_generator_agent(question: str, section: dict, full_rubric: list,
         "Return an array of blocks exactly matching the frontend UI schema: "
         '{"type": "markdown"|"image"|"table"|"code"|"mermaid", "content": ... (or "data" for tables/images)}.\n'
         "CRITICAL GUIDELINES:\n"
-        "- UNIVERSITY EXAM FORMAT: Write EXACTLY like a university topper. Use clear bullet points, bold key terms, and logically number your points. Ensure the tone is strictly academic. Focus ONLY on core concepts, necessary formulas, and key points to score maximum marks. Do not be overly verbose.\n"
+        "- LENGTH & QUALITY: Write LONG, extremely detailed, and highly technical explanations. DO NOT summarize. Provide in-depth paragraphs. Write EXACTLY like a university topper. Use clear bullet points, bold key terms, and logically number your points. Ensure the tone is strictly academic.\n"
         "- MATH & FORMULAS: Use LaTeX $...$ for inline math and $$...$$ for block math. CRITICAL: You MUST double-escape all LaTeX backslashes (e.g. use \\\\gamma instead of \\gamma, \\\\frac instead of \\frac) because this is a JSON output. ALWAYS bold or highlight the final answer/formula.\n"
         "- MULTIMODAL VISION-SYNC & EXPERT KNOWLEDGE: If provided with an image, use its specific labels and variables so your text aligns with the visual. HOWEVER, NEVER compromise the academic depth of your answer. You are an Elite Scholar; rely on your own deep internal knowledge to write highly advanced, accurate theory. The image is a visual aid, NOT the sole source of truth. If the image is overly simple, aggressively expand on it with advanced engineering concepts.\n"
         "- TABLES: When type is 'table', 'data' MUST strictly be an object: {\"headers\": [\"H1\", \"H2\"], \"rows\": [[\"R1\", \"R2\"], ...]}. NEVER return 'None' or string for table data.\n"
