@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_API_BASE = "https://openrouter.ai/api/v1/chat/completions"
 
+class OpenRouterError(Exception):
+    pass
+
 def _get_api_key():
     key = getattr(settings, "OPENROUTER_API_KEY", None) or os.getenv("OPENROUTER_API_KEY")
     if not key:
