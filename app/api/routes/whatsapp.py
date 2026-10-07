@@ -226,7 +226,7 @@ Your tasks:
    - Be smart: "cloud" = "Cloud Computing", "SQUA" = "Software Testing", "TCP" = "TCP/IP".
    - If NO reasonable match exists in their subjects, set subject_id to null and set subject_not_found to true.
 3. Write a short (1-2 sentence) reply in crisp, professional English. Be encouraging and use emojis.
-   - If subject matched: confirm it cheerfully. Tell them it's safely saved to their ClimbUP dashboard.
+   - If subject matched: EXPLICITLY state the EXACT subject name it was matched to (e.g., "File securely saved under **Software Testing**!"). Then add exactly this sentence: "I'm reading and processing this file in the background so you can ask questions about it in a few seconds! ⏳" 
    - If subject NOT found: say you couldn't detect the subject and ask them to reply with the subject name. ALSO, train them by adding: "💡 Pro Tip: Next time, add the subject name in the caption when sending a file!"
    - NEVER share any file URL, drive link, or external link in the reply.
 4. Do NOT include any links or URLs in reply_message whatsoever.
@@ -436,14 +436,19 @@ TASK: Determine the user's intent.
                 elif intent == "ask_question":
                     subject_id_to_query = data.get("subject_id")
                     
-                    if not subject_id_to_query:
-                        return f"🤔 I'm not sure which subject you are asking about, {user_name}. Please mention the subject name (e.g., 'In physics, what is...')!"
-                        
-                    from app.services.ai.rag_service import search_notes
+                    from app.services.ai.rag_service import search_notes, search_file_notes
                     user_id = user.get("user_id") or user.get("id")
                     
-                    # 1. Search Vector DB
-                    chunks = search_notes(user_id, subject_id_to_query, text_message, top_k=3)
+                    chunks = []
+                    if not subject_id_to_query:
+                        if last_resource and last_resource.get("title"):
+                            # They want to search exactly inside the last uploaded file!
+                            chunks = search_file_notes(user_id, last_resource.get("title"), text_message, top_k=5)
+                        else:
+                            return f"🤔 I'm not sure which subject you are asking about, {user_name}. Please mention the subject name (e.g., 'In physics, what is...')!"
+                    else:
+                        # 1. Search Vector DB for the subject
+                        chunks = search_notes(user_id, subject_id_to_query, text_message, top_k=3)
                     
                     if not chunks:
                         return f"📚 I looked through your notes for this subject, but couldn't find anything related to '{text_message}'. Try uploading more notes!"

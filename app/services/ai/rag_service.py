@@ -139,6 +139,40 @@ def search_notes(user_id: str, subject_id: str, query: str, top_k: int = 3) -> L
 import time
 from app.services.ai.gemini_client import categorize_pdf_with_vision
 
+
+def search_file_notes(user_id: str, file_name: str, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
+    """Searches the database for the most relevant note chunks strictly within a specific file."""
+    query_vector = get_embedding(query)
+    if not query_vector:
+        return []
+        
+    url = f"{SUPABASE_URL}/rest/v1/rpc/match_file_notes"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "query_embedding": query_vector,
+        "match_threshold": 0.5,
+        "match_count": top_k,
+        "p_user_id": user_id,
+        "p_file_name": file_name
+    }
+    
+    try:
+        import requests
+        response = requests.post(url, headers=headers, json=payload, verify=False, timeout=15)
+        if response.status_code != 200:
+            logger.error(f"Supabase RPC match_file_notes failed: {response.text}")
+            return []
+        
+        return response.json()
+    except Exception as e:
+        logger.error(f"Search file notes failed: {e}")
+        return []
+
 def process_and_embed_document(user_id: str, subject_id: str, file_name: str, file_bytes: bytes, mime_type: str):
     """
     Background worker: Extracts text (using OCR for handwriting if needed), 
