@@ -353,7 +353,8 @@ Their recent files (for fetching): {recent_files_str}
 
 TASK: Determine the user's intent.
   - Match subjects ONLY from their enrolled list above (be smart: "cloud" = Cloud Computing, "tcp" = TCP/IP).
-  - If they are ASKING A QUESTION (e.g., "explain practical 10", "what is OSI model", "tell me about stqa"): set intent="ask_question" and fill the BEST MATCHING subject_id. If no match, leave subject_id null.
+  - If they are ASKING A QUESTION (e.g., "explain practical 10", "what is OSI model"): set intent="ask_question" and fill the BEST MATCHING subject_id.
+  - If they are referring to the recently uploaded file (e.g., "explain what is in that", "summarize this file"): set intent="ask_question" and leave subject_id as null.
   - If they just uploaded a file and are replying with the subject name (e.g. "Software Testing", "put this in STQA"): set intent="categorize", fill subject_id.
   - If they mention a subject for an upload but it's NOT in their list: set intent="wrong_subject".
   - If it's just a general chat/greeting ("hi", "thanks"): set intent="chat".
