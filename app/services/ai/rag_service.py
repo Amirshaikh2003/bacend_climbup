@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # We use Gemini's free embedding model for vectorization
-GEMINI_EMBEDDING_MODEL = "models/text-embedding-004"
+GEMINI_EMBEDDING_MODEL = "models/gemini-embedding-2"
 
 def _get_api_key() -> str:
     # Use GEMINI_API_KEY from settings
