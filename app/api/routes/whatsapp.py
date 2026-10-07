@@ -644,6 +644,21 @@ async def whatsapp_webhook(request: Request):
     webhook_queue.submit(process_webhook_payload, body)
     return {"status": "ok"}
 
+
+def background_pdf_task(user_id, subject_id, file_name, file_bytes, mime_type, sender, message_id, subject_name):
+    try:
+        from app.services.ai.rag_service import process_and_embed_document
+        process_and_embed_document(user_id, subject_id, file_name, file_bytes, mime_type)
+        if message_id:
+            _send_meta_reaction(sender, message_id, "✅")
+        reply = f"✅ File securely saved under *{subject_name}*!\nI have completely read and memorized this file. You can now ask questions about it! 🚀"
+        _send_meta_message(sender, reply)
+    except Exception as e:
+        print("Background PDF Error:", e)
+        if message_id:
+            _send_meta_reaction(sender, message_id, "❌")
+        _send_meta_message(sender, "❌ Sorry, an error occurred while reading the document.")
+
 def process_webhook_payload(body: dict):
     """Background task to handle the actual webhook payload"""
     print("WEBHOOK RECEIVED FROM META:", json.dumps(body))
