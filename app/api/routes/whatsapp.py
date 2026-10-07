@@ -865,8 +865,9 @@ def process_webhook_payload(body: dict):
                                     if message_id:
                                         _send_meta_reaction(sender, message_id, "❓")
                                         
-                                # Send AI's friendly reply message
-                                if ai_result.get("reply_message"):
+                                # Send AI's friendly reply message ONLY if subject was NOT found
+                                # If subject was found, we stay silent and let background_pdf_task send the final message!
+                                if not final_subject_id and ai_result.get("reply_message"):
                                     _send_meta_message(sender, ai_result.get("reply_message"))
                             else:
                                 # DB INSERT FAILED

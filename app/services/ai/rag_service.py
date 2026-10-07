@@ -231,6 +231,7 @@ def process_and_embed_document(user_id: str, subject_id: str, file_name: str, fi
     if mime_type == "application/pdf":
         try:
             import fitz
+            fitz.TOOLS.mupdf_display_errors(False) # Suppress harmless malformed PDF warnings
             doc = fitz.open(stream=file_bytes, filetype="pdf")
             total_pages = len(doc)
             
