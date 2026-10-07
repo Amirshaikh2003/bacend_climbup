@@ -32,7 +32,8 @@ def get_embedding(text: str) -> List[float]:
         "model": GEMINI_EMBEDDING_MODEL,
         "content": {
             "parts": [{"text": text}]
-        }
+        },
+        "outputDimensionality": 768
     }
     
     data = json.dumps(payload).encode("utf-8")
