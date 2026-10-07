@@ -428,7 +428,12 @@ TASK: Determine the user's intent.
                                     public_url = upload_file_to_user_drive(None, file_resp.content, file_title, mime_type)
                                     if public_url:
                                         update_payload["file_url"] = public_url
-                                        threading.Thread(target=process_and_embed_document, args=(user.get("user_id") or user.get("id"), final_subject_id, file_title, file_resp.content, mime_type), daemon=True).start()
+                                        sub_name = "Unknown Subject"
+                                        for s in user_subjects:
+                                            if s.get("id") == final_subject_id:
+                                                sub_name = s.get("subject_name")
+                                                break
+                                        threading.Thread(target=background_pdf_task, args=(user.get("user_id") or user.get("id"), final_subject_id, file_title, file_resp.content, mime_type, sender, message_id, sub_name), daemon=True).start()
                                     else:
                                         return f"❌ System Error: Failed to upload file to Google Drive."
                                 else:
@@ -778,6 +783,7 @@ def process_webhook_payload(body: dict):
                     message_id = message_obj.get("id")
                     if message_id:
                         _send_meta_reaction(sender, message_id, "⏳")
+
                         
                     # Check daily limit (20 files/day)
                     today_iso = datetime.utcnow().date().isoformat()
@@ -836,7 +842,14 @@ def process_webhook_payload(body: dict):
                                 # Query is clear! Upload to Google Drive safely.
                                 public_url = upload_file_to_user_drive(None, file_bytes, filename, mime_type)
                                 status = "pending"
-                                threading.Thread(target=process_and_embed_document, args=(user.get("user_id") or user.get("id"), final_subject_id, filename, file_bytes, mime_type), daemon=True).start() # DB check constraint requires 'pending'
+                                sub_name = "Unknown Subject"
+                                for s in user_subjects:
+                                    if s.get("id") == final_subject_id:
+                                        sub_name = s.get("subject_name")
+                                        break
+                                threading.Thread(target=background_pdf_task, args=(user.get("user_id") or user.get("id"), final_subject_id, filename, file_bytes, mime_type, sender, message_id, sub_name), daemon=True).start()
+                                reply = f"⏳ Received *{filename}*! I'm reading and memorizing this file in the background... Please wait."
+                                _send_meta_message(sender, reply)
                             else:
                                 # Query is unclear! Delayed Download state.
                                 public_url = f"pending_meta_{media_id}"
