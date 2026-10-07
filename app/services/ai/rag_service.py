@@ -50,24 +50,28 @@ def get_embedding(text: str) -> List[float]:
         logger.error(f"Gemini Embedding request failed: {e}")
         return []
 
-def chunk_text(text: str, chunk_size: int = 1500, overlap: int = 200) -> List[str]:
-    """Splits a long string of text into overlapping chunks."""
-    words = text.split()
+def chunk_text(pages: list, file_name: str, chunk_size: int = 800, overlap: int = 100) -> List[str]:
     chunks = []
-    i = 0
-    while i < len(words):
-        chunk = " ".join(words[i:i + chunk_size])
-        chunks.append(chunk)
-        i += chunk_size - overlap
+    for p in pages:
+        page_num = p["page"]
+        text = p["text"]
+        words = text.split()
+        i = 0
+        while i < len(words):
+            chunk_words = words[i:i + chunk_size]
+            chunk_text = " ".join(chunk_words)
+            formatted_chunk = f"[FILE: {file_name} | PAGE: {page_num}]
+{chunk_text}"
+            chunks.append(formatted_chunk)
+            i += chunk_size - overlap
     return chunks
 
-def save_note_embeddings(user_id: str, subject_id: str, file_name: str, extracted_text: str) -> bool:
-    """Chunks the text, gets embeddings, and saves to Supabase notes_embeddings table."""
-    if not extracted_text.strip():
+def save_note_embeddings(user_id: str, subject_id: str, file_name: str, pages: list) -> bool:
+    if not pages:
         logger.info(f"No text extracted for {file_name}, skipping embeddings.")
         return False
         
-    chunks = chunk_text(extracted_text)
+    chunks = chunk_text(pages, file_name)
     
     records = []
     for chunk in chunks:
@@ -221,26 +225,21 @@ def generate_smart_rag_answer(prompt: str) -> str:
             return "❌ System Error: Both AI engines are currently unavailable. Please try again later."
 
 def process_and_embed_document(user_id: str, subject_id: str, file_name: str, file_bytes: bytes, mime_type: str):
-    """
-    Background worker: Extracts text (using OCR for handwriting if needed), 
-    then chunks and embeds the entire document.
-    """
-    extracted_full_text = ""
     logger.info(f"Starting background RAG processing for {file_name}...")
+    pages = []
     
     if mime_type == "application/pdf":
         try:
             import fitz
-            fitz.TOOLS.mupdf_display_errors(False) # Suppress harmless malformed PDF warnings
+            fitz.TOOLS.mupdf_display_errors(False)
             doc = fitz.open(stream=file_bytes, filetype="pdf")
             total_pages = len(doc)
             
             for page_num in range(total_pages):
                 page_text = doc[page_num].get_text()
                 if len(page_text.strip()) > 50:
-                    extracted_full_text += f"\n--- Page {page_num+1} ---\n{page_text}"
+                    pages.append({"page": page_num + 1, "text": page_text})
                 else:
-                    # Likely handwritten or scanned image. Use Gemini Vision OCR.
                     try:
                         pix = doc[page_num].get_pixmap()
                         img_bytes = pix.tobytes("png")
@@ -248,28 +247,26 @@ def process_and_embed_document(user_id: str, subject_id: str, file_name: str, fi
                         prompt = "Extract all the handwritten or printed notes from this image. Keep the technical terms intact. Format as clear readable text."
                         ocr_text = categorize_pdf_with_vision(img_bytes, prompt, max_tokens=1000)
                         
-                        extracted_full_text += f"\n--- Page {page_num+1} (OCR) ---\n{ocr_text}"
-                        
-                        # Respect Gemini Free Tier limits (~15 RPM)
+                        pages.append({"page": page_num + 1, "text": ocr_text})
+                        import time
                         time.sleep(4)
                     except Exception as ocr_err:
                         logger.error(f"OCR failed for page {page_num}: {ocr_err}")
-                        
             doc.close()
         except Exception as e:
-            logger.error(f"PyMuPDF processing failed for RAG: {e}")
+            logger.error(f"PDF processing failed: {e}")
             return
             
     elif mime_type.startswith("image/"):
-        # Single image handwritten note
         try:
-            prompt = "Extract all the handwritten or printed notes from this image. Format as clear readable text."
-            extracted_full_text = categorize_pdf_with_vision(file_bytes, prompt, max_tokens=1500)
+            prompt = "Extract all text from this image. Keep it structured and clean."
+            ocr_text = categorize_pdf_with_vision(file_bytes, prompt, max_tokens=1000)
+            pages.append({"page": 1, "text": ocr_text})
         except Exception as e:
-            logger.error(f"Vision OCR failed for image RAG: {e}")
+            logger.error(f"Image OCR failed: {e}")
             return
 
-    if extracted_full_text.strip():
-        save_note_embeddings(user_id, subject_id, file_name, extracted_full_text)
+    if pages:
+        save_note_embeddings(user_id, subject_id, file_name, pages)
     else:
         logger.warning(f"No content extracted for {file_name} to embed.")
