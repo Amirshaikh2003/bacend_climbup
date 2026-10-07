@@ -506,8 +506,8 @@ CRITICAL SECURITY RULES:
     try:
         from app.services.ai.gemini_client import chat_completion
         return chat_completion([{"role": "user", "content": prompt}], max_tokens=100, temperature=0.7).strip()
-    except:
-        return "I'm having a little trouble connecting to my brain right now! 🧠 Try asking again in a few seconds." 
+    except Exception as e:
+        return f"I'm having a little trouble connecting to my brain right now! Error: {str(e)}" 
 
 def _send_meta_message(to_number: str, text: str):
     if not WHATSAPP_TOKEN or not WHATSAPP_PHONE_ID:

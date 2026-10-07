@@ -53,10 +53,13 @@ def _get_api_key() -> str:
 
 
 def _get_model() -> str:
-    model = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
-    if "3.1" in model or "lite" in model:
-        return "gemini-1.5-flash"
-    return model
+    try:
+        model = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+        if not model or "3.1" in str(model) or "lite" in str(model):
+            return "gemini-1.5-flash"
+        return str(model)
+    except:
+        return "gemini-1.5-flash" 
 
 
 def _download_image_b64(url: str) -> Optional[tuple[str, str]]:
