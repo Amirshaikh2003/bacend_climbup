@@ -5,7 +5,7 @@ import urllib.error
 import urllib3
 from typing import List, Dict, Any, Optional
 from app.core.config import settings
-from app.services.supabase_service import _session, SUPABASE_URL, get_headers
+from app.services.supabase_service import _session, SUPABASE_URL, SUPABASE_KEY
 
 logger = logging.getLogger(__name__)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -87,7 +87,11 @@ def save_note_embeddings(user_id: str, subject_id: str, file_name: str, extracte
         
     # Bulk insert to Supabase
     url = f"{SUPABASE_URL}/rest/v1/notes_embeddings"
-    headers = get_headers()
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json"
+    }
     try:
         # Use requests for Supabase REST API
         import requests
@@ -106,7 +110,11 @@ def search_notes(user_id: str, subject_id: str, query: str, top_k: int = 3) -> L
         return []
         
     url = f"{SUPABASE_URL}/rest/v1/rpc/match_notes"
-    headers = get_headers()
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json"
+    }
     
     payload = {
         "query_embedding": query_vector,
