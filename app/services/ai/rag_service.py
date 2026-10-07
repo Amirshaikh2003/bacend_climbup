@@ -173,6 +173,52 @@ def search_file_notes(user_id: str, file_name: str, query: str, top_k: int = 3) 
         logger.error(f"Search file notes failed: {e}")
         return []
 
+
+def search_all_notes(user_id: str, query: str, top_k: int = 4) -> List[Dict[str, Any]]:
+    """Global search across all subjects for a user."""
+    query_vector = get_embedding(query)
+    if not query_vector:
+        return []
+        
+    url = f"{SUPABASE_URL}/rest/v1/rpc/match_all_notes"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "query_embedding": query_vector,
+        "match_threshold": 0.4, # slightly lower threshold for broader search
+        "match_count": top_k,
+        "p_user_id": user_id
+    }
+    
+    try:
+        import requests
+        response = requests.post(url, headers=headers, json=payload, verify=False, timeout=15)
+        if response.status_code != 200:
+            logger.error(f"Supabase RPC match_all_notes failed: {response.text}")
+            return []
+        return response.json()
+    except Exception as e:
+        logger.error(f"Search all notes failed: {e}")
+        return []
+
+def generate_smart_rag_answer(prompt: str) -> str:
+    """Tries Groq for ultra-fast generation, falls back to Gemini."""
+    try:
+        from app.services.ai.groq_client import chat_completion as groq_chat
+        return groq_chat([{"role": "user", "content": prompt}], max_tokens=1200, temperature=0.3).strip()
+    except Exception as e:
+        logger.warning(f"Groq failed for RAG (Rate limit or Key issue): {e}. Falling back to Gemini.")
+        try:
+            from app.services.ai.gemini_client import chat_completion as gemini_chat
+            return gemini_chat([{"role": "user", "content": prompt}], max_tokens=1200, temperature=0.3).strip()
+        except Exception as gemini_e:
+            logger.error(f"Gemini also failed: {gemini_e}")
+            return "❌ System Error: Both AI engines are currently unavailable. Please try again later."
+
 def process_and_embed_document(user_id: str, subject_id: str, file_name: str, file_bytes: bytes, mime_type: str):
     """
     Background worker: Extracts text (using OCR for handwriting if needed), 

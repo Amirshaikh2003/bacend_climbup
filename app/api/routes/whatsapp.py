@@ -436,35 +436,44 @@ TASK: Determine the user's intent.
                 elif intent == "ask_question":
                     subject_id_to_query = data.get("subject_id")
                     
-                    from app.services.ai.rag_service import search_notes, search_file_notes
+                    from app.services.ai.rag_service import search_notes, search_file_notes, search_all_notes, generate_smart_rag_answer
                     user_id = user.get("user_id") or user.get("id")
                     
                     chunks = []
-                    if not subject_id_to_query:
-                        if last_resource and last_resource.get("title"):
-                            # They want to search exactly inside the last uploaded file!
-                            chunks = search_file_notes(user_id, last_resource.get("title"), text_message, top_k=5)
-                        else:
-                            return f"🤔 I'm not sure which subject you are asking about, {user_name}. Please mention the subject name (e.g., 'In physics, what is...')!"
-                    else:
-                        # 1. Search Vector DB for the subject
-                        chunks = search_notes(user_id, subject_id_to_query, text_message, top_k=3)
+                    # 1. Exact File Search (if context is recent file)
+                    if not subject_id_to_query and last_resource and last_resource.get("title"):
+                        chunks = search_file_notes(user_id, last_resource.get("title"), text_message, top_k=5)
                     
+                    # 2. Exact Subject Search
+                    elif subject_id_to_query:
+                        chunks = search_notes(user_id, subject_id_to_query, text_message, top_k=5)
+                    
+                    # 3. Global Database Search Fallback (Bulletproof safety net)
                     if not chunks:
-                        return f"📚 I looked through your notes for this subject, but couldn't find anything related to '{text_message}'. Try uploading more notes!"
+                        chunks = search_all_notes(user_id, text_message, top_k=5)
                         
-                    # 2. Build Context
+                    if not chunks:
+                        return f"📚 I couldn't find that in your processed notes! (If you just uploaded a file, I might still be reading it in the background ⏳. Give me a few seconds and try asking again!)"
+                        
+                    # Build Context
                     context_text = "\n\n".join([f"From Note ({c.get('file_name', 'Unknown')}): {c.get('content', '')}" for c in chunks])
                     
-                    # 3. Generate Smart RAG Answer
-                    rag_prompt = f"You are ClimbUP's AI Tutor. Answer the student's question based strictly on the provided Notes Context below. Be highly accurate, concise, and professional. Do NOT mention the system or that you are reading chunks. If the answer is not in the context, say so gracefully.\n\nQuestion: {text_message}\n\nNotes Context:\n{context_text}"
+                    # Masterful RAG Prompt for Quality Answer
+                    rag_prompt = f"""You are ClimbUP's Elite Academic AI Tutor. 
+Answer the student's question based strictly on the provided Notes Context below. 
+
+GUIDELINES FOR HIGH QUALITY:
+- Be highly accurate, structured, and extremely student-friendly.
+- Use bullet points, bold text for key terms, and logical spacing to make the answer highly readable on WhatsApp.
+- Do NOT mention the system, chunks, or "according to the context". Speak directly and confidently.
+- If the exact answer is not completely in the context, give the best possible explanation based on the context, and add a friendly note offering further help.
+
+Question: {text_message}
+
+Notes Context:
+{context_text}"""
                     
-                    try:
-                        final_answer = chat_completion([{"role": "user", "content": rag_prompt}], max_tokens=1000, temperature=0.3)
-                        return final_answer.strip()
-                    except Exception as e:
-                        print(f"RAG Generation Error: {e}")
-                        return "❌ Sorry, I faced an issue reading your notes. Please try again."
+                    return generate_smart_rag_answer(rag_prompt)
 
                 elif intent == "wrong_subject":
                     return (
