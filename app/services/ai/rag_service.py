@@ -155,7 +155,7 @@ def search_file_notes(user_id: str, file_name: str, query: str, top_k: int = 3) 
     
     payload = {
         "query_embedding": query_vector,
-        "match_threshold": 0.5,
+        "match_threshold": 0.0,
         "match_count": top_k,
         "p_user_id": user_id,
         "p_file_name": file_name
