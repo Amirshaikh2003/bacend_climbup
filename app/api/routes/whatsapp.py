@@ -317,6 +317,7 @@ def _chat_with_student(message: str, sender: str, headers: dict, context_id: str
         
         # 2. Find the target resource to categorize
         res_resp = None
+        last_resource = {}
         if context_id:
             # If student replied to a specific message, fetch THAT specific file!
             res_resp = _session.get(
@@ -392,6 +393,7 @@ TASK: Determine the user's intent.
                 elif response_text.startswith("```"):
                     response_text = response_text[3:-3]
 
+                print("INTENT PARSER OUTPUT:", response_text)
                 data = json.loads(response_text.strip())
                 intent = data.get("intent")
 
