@@ -60,8 +60,7 @@ def chunk_text(pages: list, file_name: str, chunk_size: int = 800, overlap: int 
         while i < len(words):
             chunk_words = words[i:i + chunk_size]
             chunk_text = " ".join(chunk_words)
-            formatted_chunk = f"[FILE: {file_name} | PAGE: {page_num}]
-{chunk_text}"
+            formatted_chunk = f"[FILE: {file_name} | PAGE: {page_num}]\n{chunk_text}"
             chunks.append(formatted_chunk)
             i += chunk_size - overlap
     return chunks
