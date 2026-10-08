@@ -432,7 +432,7 @@ TASK: Determine the user's intent.
                                         update_payload["file_url"] = public_url
                                         sub_name = "Unknown Subject"
                                         for s in user_subjects:
-                                            if s.get("id") == final_subject_id:
+                                            if s.get("subject_id") == final_subject_id or s.get("id") == final_subject_id:
                                                 sub_name = s.get("subject_name")
                                                 break
                                         threading.Thread(target=background_pdf_task, args=(user.get("user_id") or user.get("id"), final_subject_id, file_title, file_resp.content, mime_type, sender, message_id, sub_name), daemon=True).start()
@@ -846,7 +846,7 @@ def process_webhook_payload(body: dict):
                                 status = "pending"
                                 sub_name = "Unknown Subject"
                                 for s in user_subjects:
-                                    if s.get("id") == final_subject_id:
+                                    if s.get("subject_id") == final_subject_id or s.get("id") == final_subject_id:
                                         sub_name = s.get("subject_name")
                                         break
                                 threading.Thread(target=background_pdf_task, args=(user.get("user_id") or user.get("id"), final_subject_id, filename, file_bytes, mime_type, sender, message_id, sub_name), daemon=True).start()
