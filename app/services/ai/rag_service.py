@@ -122,7 +122,7 @@ def search_notes(user_id: str, subject_id: str, query: str, top_k: int = 3) -> L
     
     payload = {
         "query_embedding": query_vector,
-        "match_threshold": 0.5, # Minimum similarity score
+        "match_threshold": 0.1, # Minimum similarity score
         "match_count": top_k,
         "p_user_id": user_id,
         "p_subject_id": subject_id
@@ -193,7 +193,7 @@ def search_all_notes(user_id: str, query: str, top_k: int = 4) -> List[Dict[str,
     
     payload = {
         "query_embedding": query_vector,
-        "match_threshold": 0.4, # slightly lower threshold for broader search
+        "match_threshold": 0.1, # slightly lower threshold for broader search
         "match_count": top_k,
         "p_user_id": user_id
     }
